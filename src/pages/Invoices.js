@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { generateNumber } from "../lib/numbering";
@@ -8,6 +8,18 @@ import { sendDocumentEmail } from "../lib/sendDocument";
 import "./Invoices.css";
 
 const STATUSES = ["unpaid", "paid", "overdue"];
+const SEND_COOLDOWN_MS = 30000;
+
+function emptyLineItem() {
+  return { description: "", quantity: 1, unit_price: 0 };
+}
+
+function calcTotal(items) {
+  return items.reduce(
+    (sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0),
+    0
+  );
+}
 
 function Invoices({ business, appUser }) {
   const navigate = useNavigate();
@@ -16,10 +28,13 @@ function Invoices({ business, appUser }) {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
-  const [form, setForm] = useState({ customer_id: "", status: "unpaid", total: "" });
+  const [form, setForm] = useState({ customer_id: "", status: "unpaid" });
+  const [lineItems, setLineItems] = useState([emptyLineItem()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState(null);
+  const [cooldownIds, setCooldownIds] = useState({});
+  const cooldownTimers = useRef({});
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
@@ -47,21 +62,40 @@ function Invoices({ business, appUser }) {
     fetchCustomers();
   }, [fetchInvoices, fetchCustomers]);
 
+  useEffect(() => {
+    return () => {
+      Object.values(cooldownTimers.current).forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
   const openAddModal = () => {
     setEditingInvoice(null);
-    setForm({ customer_id: "", status: "unpaid", total: "" });
+    setForm({ customer_id: "", status: "unpaid" });
+    setLineItems([emptyLineItem()]);
     setError("");
     setModalOpen(true);
   };
 
-  const openEditModal = (invoice) => {
+  const openEditModal = async (invoice) => {
     setEditingInvoice(invoice);
-    setForm({
-      customer_id: invoice.customer_id || "",
-      status: invoice.status,
-      total: invoice.total,
-    });
+    setForm({ customer_id: invoice.customer_id || "", status: invoice.status });
     setError("");
+
+    const { data: items } = await supabase
+      .from("invoice_line_items")
+      .select("*")
+      .eq("invoice_id", invoice.id);
+
+    setLineItems(
+      items && items.length > 0
+        ? items.map((i) => ({
+            id: i.id,
+            description: i.description,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+          }))
+        : [emptyLineItem()]
+    );
     setModalOpen(true);
   };
 
@@ -70,30 +104,56 @@ function Invoices({ business, appUser }) {
     setEditingInvoice(null);
   };
 
+  const updateLineItem = (index, field, value) => {
+    setLineItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const addLineItem = () => setLineItems((prev) => [...prev, emptyLineItem()]);
+
+  const removeLineItem = (index) => {
+    setLineItems((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)));
+  };
+
   const handleSave = async (e) => {
     e.preventDefault();
     setError("");
 
     if (!form.customer_id) return setError("Please select a customer.");
-    if (form.total === "" || isNaN(Number(form.total)) || Number(form.total) < 0) {
-      return setError("Enter a valid total.");
+    if (lineItems.every((i) => !i.description.trim())) {
+      return setError("Add at least one line item.");
     }
 
     setSaving(true);
+    const total = calcTotal(lineItems);
+    const cleanItems = lineItems.filter((i) => i.description.trim());
 
     if (editingInvoice) {
       const { error: updateError } = await supabase
         .from("invoices")
-        .update({
-          customer_id: form.customer_id,
-          status: form.status,
-          total: Number(form.total),
-        })
+        .update({ customer_id: form.customer_id, status: form.status, total })
         .eq("id", editingInvoice.id);
 
       if (updateError) {
         setSaving(false);
         return setError(updateError.message);
+      }
+
+      await supabase.from("invoice_line_items").delete().eq("invoice_id", editingInvoice.id);
+
+      const { error: itemsError } = await supabase.from("invoice_line_items").insert(
+        cleanItems.map((i) => ({
+          invoice_id: editingInvoice.id,
+          description: i.description,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        }))
+      );
+
+      if (itemsError) {
+        setSaving(false);
+        return setError(itemsError.message);
       }
     } else {
       let invoiceNumber;
@@ -104,18 +164,36 @@ function Invoices({ business, appUser }) {
         return setError(numError.message);
       }
 
-      const { error: insertError } = await supabase.from("invoices").insert({
-        business_id: business.id,
-        customer_id: form.customer_id,
-        quote_id: null,
-        invoice_number: invoiceNumber,
-        status: form.status,
-        total: Number(form.total),
-      });
+      const { data: inserted, error: insertError } = await supabase
+        .from("invoices")
+        .insert({
+          business_id: business.id,
+          customer_id: form.customer_id,
+          quote_id: null,
+          invoice_number: invoiceNumber,
+          status: form.status,
+          total,
+        })
+        .select()
+        .single();
 
       if (insertError) {
         setSaving(false);
         return setError(insertError.message);
+      }
+
+      const { error: itemsError } = await supabase.from("invoice_line_items").insert(
+        cleanItems.map((i) => ({
+          invoice_id: inserted.id,
+          description: i.description,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        }))
+      );
+
+      if (itemsError) {
+        setSaving(false);
+        return setError(itemsError.message);
       }
 
       notify(business.id, appUser?.id, `Invoice ${invoiceNumber} was created.`);
@@ -146,13 +224,32 @@ function Invoices({ business, appUser }) {
     }
   };
 
-  const handleDownload = (invoice) => {
+  const handleDownload = async (invoice) => {
+    const { data: items } = await supabase
+      .from("invoice_line_items")
+      .select("*")
+      .eq("invoice_id", invoice.id);
+
     const customer = customers.find((c) => c.id === invoice.customer_id);
-    const doc = generateInvoicePdf(invoice, customer, [], business);
+    const doc = generateInvoicePdf(invoice, customer, items || [], business);
     downloadPdf(doc, `invoice-${invoice.invoice_number}.pdf`);
   };
 
+  const startCooldown = (id) => {
+    setCooldownIds((prev) => ({ ...prev, [id]: true }));
+    cooldownTimers.current[id] = setTimeout(() => {
+      setCooldownIds((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      delete cooldownTimers.current[id];
+    }, SEND_COOLDOWN_MS);
+  };
+
   const handleSend = async (invoice) => {
+    if (sendingId === invoice.id || cooldownIds[invoice.id]) return;
+
     const { data: fullCustomer } = await supabase
       .from("customers")
       .select("name, email")
@@ -167,7 +264,12 @@ function Invoices({ business, appUser }) {
     setSendingId(invoice.id);
 
     try {
-      const doc = generateInvoicePdf(invoice, fullCustomer, [], business);
+      const { data: items } = await supabase
+        .from("invoice_line_items")
+        .select("*")
+        .eq("invoice_id", invoice.id);
+
+      const doc = generateInvoicePdf(invoice, fullCustomer, items || [], business);
       const pdfBase64 = pdfToBase64(doc);
 
       await sendDocumentEmail({
@@ -185,7 +287,16 @@ function Invoices({ business, appUser }) {
       window.alert(`Failed to send: ${err.message}`);
     } finally {
       setSendingId(null);
+      startCooldown(invoice.id);
     }
+  };
+
+  const modalTotal = calcTotal(lineItems);
+
+  const sendLabel = (id) => {
+    if (sendingId === id) return "Sending...";
+    if (cooldownIds[id]) return "Sent";
+    return "Send";
   };
 
   return (
@@ -272,9 +383,10 @@ function Invoices({ business, appUser }) {
                         <button
                           className="inv-action-btn"
                           onClick={() => handleSend(inv)}
-                          disabled={sendingId === inv.id}
+                          disabled={sendingId === inv.id || !!cooldownIds[inv.id]}
+                          title={cooldownIds[inv.id] ? "Sent — you can send again shortly" : ""}
                         >
-                          {sendingId === inv.id ? "Sending..." : "Send"}
+                          {sendLabel(inv.id)}
                         </button>
                         <button className="inv-action-btn" onClick={() => openEditModal(inv)}>
                           Edit
@@ -300,43 +412,86 @@ function Invoices({ business, appUser }) {
           <div className="inv-modal" onClick={(e) => e.stopPropagation()}>
             <h2>{editingInvoice ? `Edit ${editingInvoice.invoice_number}` : "New invoice"}</h2>
             <form onSubmit={handleSave}>
-              <label className="inv-label">Customer</label>
-              <select
-                className="inv-select"
-                value={form.customer_id}
-                onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
-              >
-                <option value="">Select a customer</option>
-                {customers.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <div className="inv-row-2">
+                <div>
+                  <label className="inv-label">Customer</label>
+                  <select
+                    className="inv-select"
+                    value={form.customer_id}
+                    onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
+                  >
+                    <option value="">Select a customer</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="inv-label">Status</label>
+                  <select
+                    className="inv-select"
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
 
-              <label className="inv-label">Status</label>
-              <select
-                className="inv-select"
-                value={form.status}
-                onChange={(e) => setForm({ ...form, status: e.target.value })}
-              >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
-                  </option>
-                ))}
-              </select>
+              <div className="inv-items-label">
+                <label className="inv-label" style={{ margin: 0 }}>
+                  Line items
+                </label>
+                <button type="button" className="inv-add-row-btn" onClick={addLineItem}>
+                  + Add row
+                </button>
+              </div>
 
-              <label className="inv-label">Total (R)</label>
-              <input
-                className="inv-input"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={form.total}
-                onChange={(e) => setForm({ ...form, total: e.target.value })}
-              />
+              {lineItems.map((item, index) => (
+                <div className="inv-line-item" key={item.id || index}>
+                  <input
+                    className="inv-input"
+                    placeholder="Description"
+                    value={item.description}
+                    onChange={(e) => updateLineItem(index, "description", e.target.value)}
+                  />
+                  <input
+                    className="inv-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Qty"
+                    value={item.quantity}
+                    onChange={(e) => updateLineItem(index, "quantity", e.target.value)}
+                  />
+                  <input
+                    className="inv-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Unit price"
+                    value={item.unit_price}
+                    onChange={(e) => updateLineItem(index, "unit_price", e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="inv-remove-row-btn"
+                    onClick={() => removeLineItem(index)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              <div className="inv-total-row">
+                Total: <strong>R{modalTotal.toFixed(2)}</strong>
+              </div>
 
               {error && <p className="inv-error">{error}</p>}
 

@@ -50,6 +50,7 @@ serve(async (req) => {
     const emailData = await emailRes.json();
 
     if (!emailRes.ok) {
+      console.error("Resend error:", JSON.stringify(emailData));
       return new Response(JSON.stringify({ error: emailData }), {
         status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -156,6 +156,10 @@
 .inven-muted {
   color: var(--slate);
 }
+.inven-qty-low {
+  color: #f87171;
+  font-weight: 700;
+}
 .inven-actions-cell {
   display: flex;
   gap: 8px;

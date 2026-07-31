@@ -4,7 +4,7 @@ import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
 import "./Inventory.css";
 
-const LOW_STOCK_THRESHOLD = 5;
+const DEFAULT_LOW_STOCK_THRESHOLD = 5;
 
 function Inventory({ business, appUser }) {
   const navigate = useNavigate();
@@ -12,7 +12,13 @@ function Inventory({ business, appUser }) {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-  const [form, setForm] = useState({ name: "", sku: "", quantity: "", unit_cost: "" });
+  const [form, setForm] = useState({
+    name: "",
+    sku: "",
+    quantity: "",
+    unit_cost: "",
+    low_stock_threshold: DEFAULT_LOW_STOCK_THRESHOLD,
+  });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -34,7 +40,13 @@ function Inventory({ business, appUser }) {
 
   const openAddModal = () => {
     setEditingItem(null);
-    setForm({ name: "", sku: "", quantity: "", unit_cost: "" });
+    setForm({
+      name: "",
+      sku: "",
+      quantity: "",
+      unit_cost: "",
+      low_stock_threshold: DEFAULT_LOW_STOCK_THRESHOLD,
+    });
     setError("");
     setModalOpen(true);
   };
@@ -46,6 +58,7 @@ function Inventory({ business, appUser }) {
       sku: item.sku || "",
       quantity: item.quantity,
       unit_cost: item.unit_cost ?? "",
+      low_stock_threshold: item.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD,
     });
     setError("");
     setModalOpen(true);
@@ -64,20 +77,30 @@ function Inventory({ business, appUser }) {
     if (form.quantity === "" || isNaN(Number(form.quantity)) || Number(form.quantity) < 0) {
       return setError("Enter a valid quantity.");
     }
+    if (
+      form.low_stock_threshold === "" ||
+      isNaN(Number(form.low_stock_threshold)) ||
+      Number(form.low_stock_threshold) < 0
+    ) {
+      return setError("Enter a valid low-stock threshold.");
+    }
 
     setSaving(true);
 
     const newQuantity = Number(form.quantity);
+    const threshold = Number(form.low_stock_threshold);
     const payload = {
       name: form.name,
       sku: form.sku || null,
       quantity: newQuantity,
       unit_cost: form.unit_cost === "" ? null : Number(form.unit_cost),
+      low_stock_threshold: threshold,
     };
 
     if (editingItem) {
-      const wasAboveThreshold = Number(editingItem.quantity) > LOW_STOCK_THRESHOLD;
-      const nowAtOrBelowThreshold = newQuantity <= LOW_STOCK_THRESHOLD;
+      const prevThreshold = Number(editingItem.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD);
+      const wasAboveThreshold = Number(editingItem.quantity) > prevThreshold;
+      const nowAtOrBelowThreshold = newQuantity <= threshold;
 
       const { error: updateError } = await supabase
         .from("inventory_items")
@@ -95,7 +118,7 @@ function Inventory({ business, appUser }) {
         notify(
           business.id,
           appUser?.id,
-          `"${form.name}" is running low (${newQuantity} left).`
+          `"${form.name}" is running low (${newQuantity} left, threshold ${threshold}).`
         );
       }
     } else {
@@ -111,11 +134,11 @@ function Inventory({ business, appUser }) {
 
       notify(business.id, appUser?.id, `New inventory item "${form.name}" was added.`);
 
-      if (newQuantity <= LOW_STOCK_THRESHOLD) {
+      if (newQuantity <= threshold) {
         notify(
           business.id,
           appUser?.id,
-          `"${form.name}" is starting off low on stock (${newQuantity} left).`
+          `"${form.name}" is starting off low on stock (${newQuantity} left, threshold ${threshold}).`
         );
       }
     }
@@ -172,34 +195,40 @@ function Inventory({ business, appUser }) {
                   <th>Name</th>
                   <th>SKU</th>
                   <th>Quantity</th>
+                  <th>Low-stock at</th>
                   <th>Unit cost</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {items.map((it) => (
-                  <tr key={it.id}>
-                    <td className="inven-name-cell">{it.name}</td>
-                    <td className={it.sku ? "" : "inven-muted"}>{it.sku || "—"}</td>
-                    <td>{Number(it.quantity)}</td>
-                    <td className={it.unit_cost != null ? "" : "inven-muted"}>
-                      {it.unit_cost != null ? `R${Number(it.unit_cost).toFixed(2)}` : "—"}
-                    </td>
-                    <td>
-                      <div className="inven-actions-cell">
-                        <button className="inven-action-btn" onClick={() => openEditModal(it)}>
-                          Edit
-                        </button>
-                        <button
-                          className="inven-action-btn inven-action-btn--danger"
-                          onClick={() => handleDelete(it)}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {items.map((it) => {
+                  const threshold = Number(it.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD);
+                  const isLow = Number(it.quantity) <= threshold;
+                  return (
+                    <tr key={it.id}>
+                      <td className="inven-name-cell">{it.name}</td>
+                      <td className={it.sku ? "" : "inven-muted"}>{it.sku || "—"}</td>
+                      <td className={isLow ? "inven-qty-low" : ""}>{Number(it.quantity)}</td>
+                      <td className="inven-muted">{threshold}</td>
+                      <td className={it.unit_cost != null ? "" : "inven-muted"}>
+                        {it.unit_cost != null ? `R${Number(it.unit_cost).toFixed(2)}` : "—"}
+                      </td>
+                      <td>
+                        <div className="inven-actions-cell">
+                          <button className="inven-action-btn" onClick={() => openEditModal(it)}>
+                            Edit
+                          </button>
+                          <button
+                            className="inven-action-btn inven-action-btn--danger"
+                            onClick={() => handleDelete(it)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -237,6 +266,17 @@ function Inventory({ business, appUser }) {
                 placeholder="0"
                 value={form.quantity}
                 onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+              />
+
+              <label className="inven-label">Low-stock threshold</label>
+              <input
+                className="inven-input"
+                type="number"
+                min="0"
+                step="1"
+                placeholder="5"
+                value={form.low_stock_threshold}
+                onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })}
               />
 
               <label className="inven-label">Unit cost (R)</label>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { generateNumber } from "../lib/numbering";
@@ -8,6 +8,7 @@ import { sendDocumentEmail } from "../lib/sendDocument";
 import "./Quotes.css";
 
 const STATUSES = ["draft", "sent", "accepted", "declined"];
+const SEND_COOLDOWN_MS = 30000;
 
 function emptyLineItem() {
   return { description: "", quantity: 1, unit_price: 0 };
@@ -32,6 +33,8 @@ function Quotes({ business, appUser }) {
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
   const [sendingId, setSendingId] = useState(null);
+  const [cooldownIds, setCooldownIds] = useState({});
+  const cooldownTimers = useRef({});
 
   const fetchQuotes = useCallback(async () => {
     setLoading(true);
@@ -58,6 +61,12 @@ function Quotes({ business, appUser }) {
     fetchQuotes();
     fetchCustomers();
   }, [fetchQuotes, fetchCustomers]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(cooldownTimers.current).forEach((t) => clearTimeout(t));
+    };
+  }, []);
 
   const openAddModal = () => {
     setEditingQuote(null);
@@ -252,7 +261,21 @@ function Quotes({ business, appUser }) {
     downloadPdf(doc, `quote-${quote.quote_number}.pdf`);
   };
 
+  const startCooldown = (id) => {
+    setCooldownIds((prev) => ({ ...prev, [id]: true }));
+    cooldownTimers.current[id] = setTimeout(() => {
+      setCooldownIds((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      delete cooldownTimers.current[id];
+    }, SEND_COOLDOWN_MS);
+  };
+
   const handleSend = async (quote) => {
+    if (sendingId === quote.id || cooldownIds[quote.id]) return;
+
     const { data: fullCustomer } = await supabase
       .from("customers")
       .select("name, email")
@@ -295,10 +318,17 @@ function Quotes({ business, appUser }) {
       window.alert(`Failed to send: ${err.message}`);
     } finally {
       setSendingId(null);
+      startCooldown(quote.id);
     }
   };
 
   const modalTotal = calcTotal(lineItems);
+
+  const sendLabel = (id) => {
+    if (sendingId === id) return "Sending...";
+    if (cooldownIds[id]) return "Sent";
+    return "Send";
+  };
 
   return (
     <div className="quo-page">
@@ -376,9 +406,10 @@ function Quotes({ business, appUser }) {
                         <button
                           className="quo-action-btn"
                           onClick={() => handleSend(q)}
-                          disabled={sendingId === q.id}
+                          disabled={sendingId === q.id || !!cooldownIds[q.id]}
+                          title={cooldownIds[q.id] ? "Sent — you can send again shortly" : ""}
                         >
-                          {sendingId === q.id ? "Sending..." : "Send"}
+                          {sendLabel(q.id)}
                         </button>
                         <button className="quo-action-btn" onClick={() => openEditModal(q)}>
                           Edit

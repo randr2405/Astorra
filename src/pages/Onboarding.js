@@ -8,6 +8,7 @@ const checklistOptions = [
   { key: "bookings", label: "We manage bookings or scheduling" },
   { key: "stock", label: "We track stock or inventory" },
   { key: "staff", label: "We manage staff records" },
+  { key: "documents", label: "We manage documents or paperwork" },
 ];
 
 const PLAN_LIMITS = {
@@ -19,14 +20,11 @@ const PLAN_LIMITS = {
 
 function capModulesToPlan(modules, plan) {
   const limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
-  const withoutDocuments = modules.filter((m) => m !== "documents");
-  const capped = withoutDocuments.slice(0, limit);
-  return ["documents", ...capped];
+  return modules.slice(0, limit);
 }
 
 function mapAnswersToModules(answers) {
   const modules = new Set();
-  modules.add("documents");
 
   if (answers.quotes) {
     modules.add("quotes");
@@ -45,6 +43,9 @@ function mapAnswersToModules(answers) {
   if (answers.staff) {
     modules.add("staff");
   }
+  if (answers.documents) {
+    modules.add("documents");
+  }
 
   return Array.from(modules);
 }
@@ -58,6 +59,7 @@ function Onboarding({ firebaseUser, onComplete }) {
     bookings: false,
     stock: false,
     staff: false,
+    documents: false,
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
