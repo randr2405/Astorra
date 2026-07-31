@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { generateNumber } from "../lib/numbering";
 import { notify } from "../lib/notifications";
+import { generateInvoicePdf, downloadPdf, pdfToBase64 } from "../lib/pdfGenerator";
+import { sendDocumentEmail } from "../lib/sendDocument";
 import "./Invoices.css";
 
 const STATUSES = ["unpaid", "paid", "overdue"];
@@ -17,6 +19,7 @@ function Invoices({ business, appUser }) {
   const [form, setForm] = useState({ customer_id: "", status: "unpaid", total: "" });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [sendingId, setSendingId] = useState(null);
 
   const fetchInvoices = useCallback(async () => {
     setLoading(true);
@@ -143,6 +146,48 @@ function Invoices({ business, appUser }) {
     }
   };
 
+  const handleDownload = (invoice) => {
+    const customer = customers.find((c) => c.id === invoice.customer_id);
+    const doc = generateInvoicePdf(invoice, customer, [], business);
+    downloadPdf(doc, `invoice-${invoice.invoice_number}.pdf`);
+  };
+
+  const handleSend = async (invoice) => {
+    const { data: fullCustomer } = await supabase
+      .from("customers")
+      .select("name, email")
+      .eq("id", invoice.customer_id)
+      .single();
+
+    if (!fullCustomer?.email) {
+      window.alert("This customer has no email address on file.");
+      return;
+    }
+
+    setSendingId(invoice.id);
+
+    try {
+      const doc = generateInvoicePdf(invoice, fullCustomer, [], business);
+      const pdfBase64 = pdfToBase64(doc);
+
+      await sendDocumentEmail({
+        type: "invoice",
+        number: invoice.invoice_number,
+        toEmail: fullCustomer.email,
+        toName: fullCustomer.name,
+        pdfBase64,
+        businessName: business.name,
+      });
+
+      notify(business.id, appUser?.id, `Invoice ${invoice.invoice_number} was emailed to ${fullCustomer.name}.`);
+      window.alert("Invoice sent.");
+    } catch (err) {
+      window.alert(`Failed to send: ${err.message}`);
+    } finally {
+      setSendingId(null);
+    }
+  };
+
   return (
     <div className="inv-page">
       <nav className="inv-nav">
@@ -221,6 +266,16 @@ function Invoices({ business, appUser }) {
                             Mark paid
                           </button>
                         )}
+                        <button className="inv-action-btn" onClick={() => handleDownload(inv)}>
+                          Download
+                        </button>
+                        <button
+                          className="inv-action-btn"
+                          onClick={() => handleSend(inv)}
+                          disabled={sendingId === inv.id}
+                        >
+                          {sendingId === inv.id ? "Sending..." : "Send"}
+                        </button>
                         <button className="inv-action-btn" onClick={() => openEditModal(inv)}>
                           Edit
                         </button>

@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { generateNumber } from "../lib/numbering";
 import { notify } from "../lib/notifications";
+import { generateQuotePdf, downloadPdf, pdfToBase64 } from "../lib/pdfGenerator";
+import { sendDocumentEmail } from "../lib/sendDocument";
 import "./Quotes.css";
 
 const STATUSES = ["draft", "sent", "accepted", "declined"];
@@ -29,6 +31,7 @@ function Quotes({ business, appUser }) {
   const [lineItems, setLineItems] = useState([emptyLineItem()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [sendingId, setSendingId] = useState(null);
 
   const fetchQuotes = useCallback(async () => {
     setLoading(true);
@@ -238,6 +241,63 @@ function Quotes({ business, appUser }) {
     }
   };
 
+  const handleDownload = async (quote) => {
+    const { data: items } = await supabase
+      .from("quote_line_items")
+      .select("*")
+      .eq("quote_id", quote.id);
+
+    const customer = customers.find((c) => c.id === quote.customer_id);
+    const doc = generateQuotePdf(quote, customer, items || [], business);
+    downloadPdf(doc, `quote-${quote.quote_number}.pdf`);
+  };
+
+  const handleSend = async (quote) => {
+    const { data: fullCustomer } = await supabase
+      .from("customers")
+      .select("name, email")
+      .eq("id", quote.customer_id)
+      .single();
+
+    if (!fullCustomer?.email) {
+      window.alert("This customer has no email address on file.");
+      return;
+    }
+
+    setSendingId(quote.id);
+
+    try {
+      const { data: items } = await supabase
+        .from("quote_line_items")
+        .select("*")
+        .eq("quote_id", quote.id);
+
+      const doc = generateQuotePdf(quote, fullCustomer, items || [], business);
+      const pdfBase64 = pdfToBase64(doc);
+
+      await sendDocumentEmail({
+        type: "quote",
+        number: quote.quote_number,
+        toEmail: fullCustomer.email,
+        toName: fullCustomer.name,
+        pdfBase64,
+        businessName: business.name,
+      });
+
+      if (quote.status === "draft") {
+        await supabase.from("quotes").update({ status: "sent" }).eq("id", quote.id);
+        fetchQuotes();
+      }
+
+      notify(business.id, appUser?.id, `Quote ${quote.quote_number} was emailed to ${fullCustomer.name}.`);
+      window.alert("Quote sent.");
+    } catch (err) {
+      window.alert(`Failed to send: ${err.message}`);
+    } finally {
+      setSendingId(null);
+    }
+  };
+
   const modalTotal = calcTotal(lineItems);
 
   return (
@@ -310,6 +370,16 @@ function Quotes({ business, appUser }) {
                             Convert
                           </button>
                         )}
+                        <button className="quo-action-btn" onClick={() => handleDownload(q)}>
+                          Download
+                        </button>
+                        <button
+                          className="quo-action-btn"
+                          onClick={() => handleSend(q)}
+                          disabled={sendingId === q.id}
+                        >
+                          {sendingId === q.id ? "Sending..." : "Send"}
+                        </button>
                         <button className="quo-action-btn" onClick={() => openEditModal(q)}>
                           Edit
                         </button>
