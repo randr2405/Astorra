@@ -139,6 +139,11 @@
 .inv-muted { color: var(--slate); }
 .inv-total-cell { font-weight: 600; color: #fdfdfe; }
 
+.inv-due-overdue {
+  color: #f87171;
+  font-weight: 600;
+}
+
 .inv-status {
   display: inline-block;
   font-size: 12px;

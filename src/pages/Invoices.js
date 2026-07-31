@@ -21,13 +21,27 @@ function calcTotal(items) {
   );
 }
 
+function formatDueDate(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function isPastDue(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d < today;
+}
+
 function Invoices({ business, appUser }) {
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
-  const [form, setForm] = useState({ customer_id: "", status: "unpaid" });
+  const [form, setForm] = useState({ customer_id: "", status: "unpaid", due_date: "" });
   const [lineItems, setLineItems] = useState([emptyLineItem()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -70,7 +84,7 @@ function Invoices({ business, appUser }) {
 
   const openAddModal = () => {
     setEditingInvoice(null);
-    setForm({ customer_id: "", status: "unpaid" });
+    setForm({ customer_id: "", status: "unpaid", due_date: "" });
     setLineItems([emptyLineItem()]);
     setError("");
     setModalOpen(true);
@@ -78,7 +92,11 @@ function Invoices({ business, appUser }) {
 
   const openEditModal = async (invoice) => {
     setEditingInvoice(invoice);
-    setForm({ customer_id: invoice.customer_id || "", status: invoice.status });
+    setForm({
+      customer_id: invoice.customer_id || "",
+      status: invoice.status,
+      due_date: invoice.due_date || "",
+    });
     setError("");
 
     const { data: items } = await supabase
@@ -132,7 +150,12 @@ function Invoices({ business, appUser }) {
     if (editingInvoice) {
       const { error: updateError } = await supabase
         .from("invoices")
-        .update({ customer_id: form.customer_id, status: form.status, total })
+        .update({
+          customer_id: form.customer_id,
+          status: form.status,
+          due_date: form.due_date || null,
+          total,
+        })
         .eq("id", editingInvoice.id);
 
       if (updateError) {
@@ -172,6 +195,7 @@ function Invoices({ business, appUser }) {
           quote_id: null,
           invoice_number: invoiceNumber,
           status: form.status,
+          due_date: form.due_date || null,
           total,
         })
         .select()
@@ -340,6 +364,7 @@ function Invoices({ business, appUser }) {
                   <th>Quote #</th>
                   <th>Customer</th>
                   <th>Status</th>
+                  <th>Due date</th>
                   <th>Total</th>
                   <th></th>
                 </tr>
@@ -358,6 +383,17 @@ function Invoices({ business, appUser }) {
                       <span className={`inv-status inv-status--${inv.status}`}>
                         {inv.status}
                       </span>
+                    </td>
+                    <td
+                      className={
+                        inv.status !== "paid" && isPastDue(inv.due_date)
+                          ? "inv-due-overdue"
+                          : inv.due_date
+                          ? ""
+                          : "inv-muted"
+                      }
+                    >
+                      {formatDueDate(inv.due_date)}
                     </td>
                     <td className="inv-total-cell">R{Number(inv.total).toFixed(2)}</td>
                     <td>
@@ -436,6 +472,14 @@ function Invoices({ business, appUser }) {
                   </select>
                 </div>
               </div>
+
+              <label className="inv-label">Due date (optional)</label>
+              <input
+                className="inv-input"
+                type="date"
+                value={form.due_date}
+                onChange={(e) => setForm({ ...form, due_date: e.target.value })}
+              />
 
               <div className="inv-items-label">
                 <label className="inv-label" style={{ margin: 0 }}>
