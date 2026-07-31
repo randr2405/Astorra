@@ -63,8 +63,9 @@ function Quotes({ business, appUser }) {
   }, [fetchQuotes, fetchCustomers]);
 
   useEffect(() => {
+    const timers = cooldownTimers.current;
     return () => {
-      Object.values(cooldownTimers.current).forEach((t) => clearTimeout(t));
+      Object.values(timers).forEach((t) => clearTimeout(t));
     };
   }, []);
 
