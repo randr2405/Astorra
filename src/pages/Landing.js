@@ -23,7 +23,7 @@ function useScrollReveal() {
 
 const modules = [
   { name: "Customers", desc: "One record per customer, feeding everything else" },
-  { name: "Quotes", desc: "Send a quote, know the moment it's viewed" },
+  { name: "Quotes", desc: "Create and send quotes to customers, ready to convert" },
   { name: "Invoices", desc: "Convert quotes to invoices, track what's paid" },
   { name: "Inventory", desc: "Stock levels that stay accurate on their own" },
   { name: "Staff / HR", desc: "Records and basics, without a separate system" },
