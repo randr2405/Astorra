@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
+import AppNav from "../components/AppNav";
 import "./Bookings.css";
 
 const STATUSES = ["confirmed", "cancelled", "completed"];
@@ -34,7 +34,6 @@ function emptyForm() {
 }
 
 function Bookings({ business, appUser }) {
-  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -197,14 +196,7 @@ function Bookings({ business, appUser }) {
 
   return (
     <div className="book-page">
-      <nav className="book-nav">
-        <div className="book-nav-inner">
-          <button className="book-back" onClick={() => navigate("/dashboard")}>
-            ← Dashboard
-          </button>
-          <span className="book-wordmark">ASTORRA</span>
-        </div>
-      </nav>
+      <AppNav business={business} />
 
       <div className="book-body">
         <div className="book-header">

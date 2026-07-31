@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
+import AppNav from "../components/AppNav";
 import "./Customers.css";
 
 function Customers({ business, appUser }) {
-  const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -109,14 +108,7 @@ function Customers({ business, appUser }) {
 
   return (
     <div className="cust-page">
-      <nav className="cust-nav">
-        <div className="cust-nav-inner">
-          <button className="cust-back" onClick={() => navigate("/dashboard")}>
-            ← Dashboard
-          </button>
-          <span className="cust-wordmark">ASTORRA</span>
-        </div>
-      </nav>
+      <AppNav business={business} />
 
       <div className="cust-body">
         <div className="cust-header">

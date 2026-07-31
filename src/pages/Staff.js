@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
+import AppNav from "../components/AppNav";
 import "./Staff.css";
 
 function Staff({ business, appUser }) {
-  const navigate = useNavigate();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -116,14 +115,7 @@ function Staff({ business, appUser }) {
 
   return (
     <div className="staff-page">
-      <nav className="staff-nav">
-        <div className="staff-nav-inner">
-          <button className="staff-back" onClick={() => navigate("/dashboard")}>
-            ← Dashboard
-          </button>
-          <span className="staff-wordmark">ASTORRA</span>
-        </div>
-      </nav>
+      <AppNav business={business} />
 
       <div className="staff-body">
         <div className="staff-header">

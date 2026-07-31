@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { generateNumber } from "../lib/numbering";
 import { notify } from "../lib/notifications";
 import { generateInvoicePdf, downloadPdf, pdfToBase64 } from "../lib/pdfGenerator";
 import { sendDocumentEmail } from "../lib/sendDocument";
+import AppNav from "../components/AppNav";
 import "./Invoices.css";
 
 const STATUSES = ["unpaid", "paid", "overdue"];
@@ -22,7 +22,6 @@ function calcTotal(items) {
 }
 
 function Invoices({ business, appUser }) {
-  const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -302,14 +301,7 @@ function Invoices({ business, appUser }) {
 
   return (
     <div className="inv-page">
-      <nav className="inv-nav">
-        <div className="inv-nav-inner">
-          <button className="inv-back" onClick={() => navigate("/dashboard")}>
-            ← Dashboard
-          </button>
-          <span className="inv-wordmark">ASTORRA</span>
-        </div>
-      </nav>
+      <AppNav business={business} />
 
       <div className="inv-body">
         <div className="inv-header">

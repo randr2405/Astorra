@@ -1,248 +1,507 @@
-@import url("https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap");
+import { useState, useEffect, useCallback, useRef } from "react";
+import { supabase } from "../lib/supabaseClient";
+import { generateNumber } from "../lib/numbering";
+import { notify } from "../lib/notifications";
+import { generateInvoicePdf, downloadPdf, pdfToBase64 } from "../lib/pdfGenerator";
+import { sendDocumentEmail } from "../lib/sendDocument";
+import AppNav from "../components/AppNav";
+import "./Invoices.css";
 
-:root {
-  --navy: #0b0f1a;
-  --navy-raised: #111527;
-  --purple: #7c3aed;
-  --blue: #3b82f6;
-  --teal: #14b8a6;
-  --border: rgba(255, 255, 255, 0.08);
-  --slate: #6b7280;
-}
+const STATUSES = ["unpaid", "paid", "overdue"];
+const SEND_COOLDOWN_MS = 30000;
 
-.inv-page {
-  min-height: 100vh;
-  background: var(--navy);
-  color: #e7e9ef;
-  font-family: "Inter", sans-serif;
+function emptyLineItem() {
+  return { description: "", quantity: 1, unit_price: 0 };
 }
 
-.inv-nav {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  background: rgba(11, 15, 26, 0.85);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
-}
-.inv-nav-inner {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 16px 32px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.inv-back {
-  background: transparent;
-  border: none;
-  color: var(--slate);
-  font-family: "Inter", sans-serif;
-  font-size: 13.5px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.inv-back:hover { color: #e7e9ef; }
-.inv-wordmark {
-  font-family: "Sora", sans-serif;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  font-size: 17px;
-  color: #fdfdfe;
+function calcTotal(items) {
+  return items.reduce(
+    (sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0),
+    0
+  );
 }
 
-.inv-body {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 48px 32px 80px;
-}
-.inv-header {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  margin-bottom: 32px;
-  gap: 20px;
-}
-.inv-eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--teal);
-  margin: 0 0 10px;
-}
-.inv-heading {
-  font-family: "Sora", sans-serif;
-  font-size: 28px;
-  font-weight: 600;
-  color: #fdfdfe;
-  margin: 0;
-}
-.inv-add-btn {
-  background: linear-gradient(135deg, var(--purple), var(--blue) 55%, var(--teal));
-  color: #fff;
-  border: none;
-  border-radius: 10px;
-  padding: 12px 22px;
-  font-family: "Inter", sans-serif;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 0 8px 24px -8px rgba(124, 58, 237, 0.5);
-}
-.inv-add-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 12px 28px -8px rgba(59, 130, 246, 0.55);
-}
-.inv-add-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+function Invoices({ business, appUser }) {
+  const [invoices, setInvoices] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [form, setForm] = useState({ customer_id: "", status: "unpaid" });
+  const [lineItems, setLineItems] = useState([emptyLineItem()]);
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [sendingId, setSendingId] = useState(null);
+  const [cooldownIds, setCooldownIds] = useState({});
+  const cooldownTimers = useRef({});
 
-.inv-empty {
-  text-align: center;
-  color: var(--slate);
-  font-size: 14.5px;
-  padding: 60px 20px;
-  border: 1px dashed var(--border);
-  border-radius: 12px;
+  const fetchInvoices = useCallback(async () => {
+    setLoading(true);
+    const { data, error: fetchError } = await supabase
+      .from("invoices")
+      .select("*, customers(name), quotes(quote_number)")
+      .eq("business_id", business.id)
+      .order("created_at", { ascending: false });
+
+    if (!fetchError) setInvoices(data || []);
+    setLoading(false);
+  }, [business.id]);
+
+  const fetchCustomers = useCallback(async () => {
+    const { data } = await supabase
+      .from("customers")
+      .select("id, name")
+      .eq("business_id", business.id)
+      .order("name", { ascending: true });
+    setCustomers(data || []);
+  }, [business.id]);
+
+  useEffect(() => {
+    fetchInvoices();
+    fetchCustomers();
+  }, [fetchInvoices, fetchCustomers]);
+
+  useEffect(() => {
+    const timers = cooldownTimers.current;
+    return () => {
+      Object.values(timers).forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
+  const openAddModal = () => {
+    setEditingInvoice(null);
+    setForm({ customer_id: "", status: "unpaid" });
+    setLineItems([emptyLineItem()]);
+    setError("");
+    setModalOpen(true);
+  };
+
+  const openEditModal = async (invoice) => {
+    setEditingInvoice(invoice);
+    setForm({ customer_id: invoice.customer_id || "", status: invoice.status });
+    setError("");
+
+    const { data: items } = await supabase
+      .from("invoice_line_items")
+      .select("*")
+      .eq("invoice_id", invoice.id);
+
+    setLineItems(
+      items && items.length > 0
+        ? items.map((i) => ({
+            id: i.id,
+            description: i.description,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+          }))
+        : [emptyLineItem()]
+    );
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingInvoice(null);
+  };
+
+  const updateLineItem = (index, field, value) => {
+    setLineItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const addLineItem = () => setLineItems((prev) => [...prev, emptyLineItem()]);
+
+  const removeLineItem = (index) => {
+    setLineItems((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)));
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!form.customer_id) return setError("Please select a customer.");
+    if (lineItems.every((i) => !i.description.trim())) {
+      return setError("Add at least one line item.");
+    }
+
+    setSaving(true);
+    const total = calcTotal(lineItems);
+    const cleanItems = lineItems.filter((i) => i.description.trim());
+
+    if (editingInvoice) {
+      const { error: updateError } = await supabase
+        .from("invoices")
+        .update({ customer_id: form.customer_id, status: form.status, total })
+        .eq("id", editingInvoice.id);
+
+      if (updateError) {
+        setSaving(false);
+        return setError(updateError.message);
+      }
+
+      await supabase.from("invoice_line_items").delete().eq("invoice_id", editingInvoice.id);
+
+      const { error: itemsError } = await supabase.from("invoice_line_items").insert(
+        cleanItems.map((i) => ({
+          invoice_id: editingInvoice.id,
+          description: i.description,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        }))
+      );
+
+      if (itemsError) {
+        setSaving(false);
+        return setError(itemsError.message);
+      }
+    } else {
+      let invoiceNumber;
+      try {
+        invoiceNumber = await generateNumber(business.id, "invoice");
+      } catch (numError) {
+        setSaving(false);
+        return setError(numError.message);
+      }
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("invoices")
+        .insert({
+          business_id: business.id,
+          customer_id: form.customer_id,
+          quote_id: null,
+          invoice_number: invoiceNumber,
+          status: form.status,
+          total,
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        setSaving(false);
+        return setError(insertError.message);
+      }
+
+      const { error: itemsError } = await supabase.from("invoice_line_items").insert(
+        cleanItems.map((i) => ({
+          invoice_id: inserted.id,
+          description: i.description,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        }))
+      );
+
+      if (itemsError) {
+        setSaving(false);
+        return setError(itemsError.message);
+      }
+
+      notify(business.id, appUser?.id, `Invoice ${invoiceNumber} was created.`);
+    }
+
+    setSaving(false);
+    closeModal();
+    fetchInvoices();
+  };
+
+  const handleDelete = async (invoice) => {
+    if (!window.confirm(`Delete invoice ${invoice.invoice_number}? This can't be undone.`)) return;
+    const { error: deleteError } = await supabase.from("invoices").delete().eq("id", invoice.id);
+    if (!deleteError) {
+      notify(business.id, appUser?.id, `Invoice ${invoice.invoice_number} was deleted.`);
+      fetchInvoices();
+    }
+  };
+
+  const handleMarkPaid = async (invoice) => {
+    const { error: updateError } = await supabase
+      .from("invoices")
+      .update({ status: "paid" })
+      .eq("id", invoice.id);
+    if (!updateError) {
+      notify(business.id, appUser?.id, `Invoice ${invoice.invoice_number} was marked as paid.`);
+      fetchInvoices();
+    }
+  };
+
+  const handleDownload = async (invoice) => {
+    const { data: items } = await supabase
+      .from("invoice_line_items")
+      .select("*")
+      .eq("invoice_id", invoice.id);
+
+    const customer = customers.find((c) => c.id === invoice.customer_id);
+    const doc = generateInvoicePdf(invoice, customer, items || [], business);
+    downloadPdf(doc, `invoice-${invoice.invoice_number}.pdf`);
+  };
+
+  const startCooldown = (id) => {
+    setCooldownIds((prev) => ({ ...prev, [id]: true }));
+    cooldownTimers.current[id] = setTimeout(() => {
+      setCooldownIds((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      delete cooldownTimers.current[id];
+    }, SEND_COOLDOWN_MS);
+  };
+
+  const handleSend = async (invoice) => {
+    if (sendingId === invoice.id || cooldownIds[invoice.id]) return;
+
+    const { data: fullCustomer } = await supabase
+      .from("customers")
+      .select("name, email")
+      .eq("id", invoice.customer_id)
+      .single();
+
+    if (!fullCustomer?.email) {
+      window.alert("This customer has no email address on file.");
+      return;
+    }
+
+    setSendingId(invoice.id);
+
+    try {
+      const { data: items } = await supabase
+        .from("invoice_line_items")
+        .select("*")
+        .eq("invoice_id", invoice.id);
+
+      const doc = generateInvoicePdf(invoice, fullCustomer, items || [], business);
+      const pdfBase64 = pdfToBase64(doc);
+
+      await sendDocumentEmail({
+        type: "invoice",
+        number: invoice.invoice_number,
+        toEmail: fullCustomer.email,
+        toName: fullCustomer.name,
+        pdfBase64,
+        businessName: business.name,
+      });
+
+      notify(business.id, appUser?.id, `Invoice ${invoice.invoice_number} was emailed to ${fullCustomer.name}.`);
+      window.alert("Invoice sent.");
+    } catch (err) {
+      window.alert(`Failed to send: ${err.message}`);
+    } finally {
+      setSendingId(null);
+      startCooldown(invoice.id);
+    }
+  };
+
+  const modalTotal = calcTotal(lineItems);
+
+  const sendLabel = (id) => {
+    if (sendingId === id) return "Sending...";
+    if (cooldownIds[id]) return "Sent";
+    return "Send";
+  };
+
+  return (
+    <div className="inv-page">
+      <AppNav business={business} />
+
+      <div className="inv-body">
+        <div className="inv-header">
+          <div>
+            <p className="inv-eyebrow">Invoices</p>
+            <h1 className="inv-heading">Your invoices</h1>
+          </div>
+          <button
+            className="inv-add-btn"
+            onClick={openAddModal}
+            disabled={customers.length === 0}
+            title={customers.length === 0 ? "Add a customer first" : ""}
+          >
+            + New invoice
+          </button>
+        </div>
+
+        {customers.length === 0 && (
+          <div className="inv-empty" style={{ marginBottom: 24 }}>
+            You need at least one customer before creating an invoice.
+          </div>
+        )}
+
+        {loading ? (
+          <p className="inv-muted">Loading...</p>
+        ) : invoices.length === 0 ? (
+          <div className="inv-empty">
+            No invoices yet. Create one directly or convert an accepted quote.
+          </div>
+        ) : (
+          <div className="inv-table-wrap">
+            <table className="inv-table">
+              <thead>
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Quote #</th>
+                  <th>Customer</th>
+                  <th>Status</th>
+                  <th>Total</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.map((inv) => (
+                  <tr key={inv.id}>
+                    <td className="inv-name-cell">{inv.invoice_number}</td>
+                    <td className={inv.quotes?.quote_number ? "" : "inv-muted"}>
+                      {inv.quotes?.quote_number || "—"}
+                    </td>
+                    <td className={inv.customers?.name ? "" : "inv-muted"}>
+                      {inv.customers?.name || "—"}
+                    </td>
+                    <td>
+                      <span className={`inv-status inv-status--${inv.status}`}>
+                        {inv.status}
+                      </span>
+                    </td>
+                    <td className="inv-total-cell">R{Number(inv.total).toFixed(2)}</td>
+                    <td>
+                      <div className="inv-actions-cell">
+                        {inv.status !== "paid" && (
+                          <button
+                            className="inv-action-btn"
+                            onClick={() => handleMarkPaid(inv)}
+                          >
+                            Mark paid
+                          </button>
+                        )}
+                        <button className="inv-action-btn" onClick={() => handleDownload(inv)}>
+                          Download
+                        </button>
+                        <button
+                          className="inv-action-btn"
+                          onClick={() => handleSend(inv)}
+                          disabled={sendingId === inv.id || !!cooldownIds[inv.id]}
+                          title={cooldownIds[inv.id] ? "Sent — you can send again shortly" : ""}
+                        >
+                          {sendLabel(inv.id)}
+                        </button>
+                        <button className="inv-action-btn" onClick={() => openEditModal(inv)}>
+                          Edit
+                        </button>
+                        <button
+                          className="inv-action-btn inv-action-btn--danger"
+                          onClick={() => handleDelete(inv)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {modalOpen && (
+        <div className="inv-modal-overlay" onClick={closeModal}>
+          <div className="inv-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>{editingInvoice ? `Edit ${editingInvoice.invoice_number}` : "New invoice"}</h2>
+            <form onSubmit={handleSave}>
+              <div className="inv-row-2">
+                <div>
+                  <label className="inv-label">Customer</label>
+                  <select
+                    className="inv-select"
+                    value={form.customer_id}
+                    onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
+                  >
+                    <option value="">Select a customer</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="inv-label">Status</label>
+                  <select
+                    className="inv-select"
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="inv-items-label">
+                <label className="inv-label" style={{ margin: 0 }}>
+                  Line items
+                </label>
+                <button type="button" className="inv-add-row-btn" onClick={addLineItem}>
+                  + Add row
+                </button>
+              </div>
+
+              {lineItems.map((item, index) => (
+                <div className="inv-line-item" key={item.id || index}>
+                  <input
+                    className="inv-input"
+                    placeholder="Description"
+                    value={item.description}
+                    onChange={(e) => updateLineItem(index, "description", e.target.value)}
+                  />
+                  <input
+                    className="inv-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Qty"
+                    value={item.quantity}
+                    onChange={(e) => updateLineItem(index, "quantity", e.target.value)}
+                  />
+                  <input
+                    className="inv-input"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="Unit price"
+                    value={item.unit_price}
+                    onChange={(e) => updateLineItem(index, "unit_price", e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    className="inv-remove-row-btn"
+                    onClick={() => removeLineItem(index)}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+
+              <div className="inv-total-row">
+                Total: <strong>R{modalTotal.toFixed(2)}</strong>
+              </div>
+
+              {error && <p className="inv-error">{error}</p>}
+
+              <div className="inv-modal-actions">
+                <button type="button" className="inv-cancel-btn" onClick={closeModal}>
+                  Cancel
+                </button>
+                <button type="submit" className="inv-add-btn" disabled={saving}>
+                  {saving ? "Saving..." : editingInvoice ? "Save changes" : "Create invoice"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
-.inv-table-wrap {
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
-}
-.inv-table { width: 100%; border-collapse: collapse; }
-.inv-table th {
-  text-align: left;
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--slate);
-  font-weight: 600;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-}
-.inv-table td {
-  padding: 16px 20px;
-  font-size: 14.5px;
-  color: #d7dae2;
-  border-bottom: 1px solid var(--border);
-}
-.inv-table tr:last-child td { border-bottom: none; }
-.inv-table tr:hover td { background: rgba(255, 255, 255, 0.02); }
-.inv-name-cell { font-weight: 600; color: #fdfdfe; }
-.inv-muted { color: var(--slate); }
-.inv-total-cell { font-weight: 600; color: #fdfdfe; }
-
-.inv-status {
-  display: inline-block;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 999px;
-  text-transform: capitalize;
-}
-.inv-status--unpaid { background: rgba(107, 114, 128, 0.2); color: #9ca3af; }
-.inv-status--paid { background: rgba(20, 184, 166, 0.16); color: #2dd4bf; }
-.inv-status--overdue { background: rgba(248, 113, 113, 0.16); color: #f87171; }
-
-.inv-actions-cell { display: flex; gap: 8px; justify-content: flex-end; }
-.inv-action-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  color: #e7e9ef;
-  border-radius: 8px;
-  padding: 6px 14px;
-  font-family: "Inter", sans-serif;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 0.15s ease;
-}
-.inv-action-btn:hover { border-color: var(--blue); }
-.inv-action-btn--danger:hover { border-color: #f87171; color: #f87171; }
-
-/* Modal */
-.inv-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 50;
-  padding: 20px;
-}
-.inv-modal {
-  width: 100%;
-  max-width: 480px;
-  max-height: 88vh;
-  overflow-y: auto;
-  background: var(--navy-raised);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 32px;
-  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
-}
-.inv-modal h2 {
-  font-family: "Sora", sans-serif;
-  font-size: 20px;
-  font-weight: 600;
-  color: #fdfdfe;
-  margin: 0 0 24px;
-}
-.inv-label {
-  display: block;
-  font-size: 13px;
-  font-weight: 500;
-  color: #d7dae2;
-  margin: 0 0 6px;
-}
-.inv-select,
-.inv-input {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
-  margin-bottom: 16px;
-  font-family: "Inter", sans-serif;
-  font-size: 14.5px;
-  color: #e7e9ef;
-  transition: border-color 0.15s ease;
-}
-.inv-select { appearance: none; cursor: pointer; }
-.inv-input::placeholder { color: var(--slate); }
-.inv-select:focus, .inv-input:focus { outline: none; border-color: var(--blue); }
-
-.inv-modal-actions { display: flex; gap: 10px; margin-top: 18px; }
-.inv-modal-actions .inv-add-btn { flex: 1; }
-.inv-cancel-btn {
-  flex: 1;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: #e7e9ef;
-  border-radius: 10px;
-  padding: 12px 22px;
-  font-family: "Inter", sans-serif;
-  font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  transition: border-color 0.15s ease;
-}
-.inv-cancel-btn:hover { border-color: var(--blue); }
-.inv-error {
-  color: #f87171;
-  font-size: 13.5px;
-  margin: -8px 0 14px;
-}
-
-@media (max-width: 700px) {
-  .inv-table th:nth-child(2),
-  .inv-table td:nth-child(2) { display: none; }
-}
+export default Invoices;

@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
+import AppNav from "../components/AppNav";
 import "./Inventory.css";
 
 const DEFAULT_LOW_STOCK_THRESHOLD = 5;
 
 function Inventory({ business, appUser }) {
-  const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -161,14 +160,7 @@ function Inventory({ business, appUser }) {
 
   return (
     <div className="inven-page">
-      <nav className="inven-nav">
-        <div className="inven-nav-inner">
-          <button className="inven-back" onClick={() => navigate("/dashboard")}>
-            ← Dashboard
-          </button>
-          <span className="inven-wordmark">ASTORRA</span>
-        </div>
-      </nav>
+      <AppNav business={business} />
 
       <div className="inven-body">
         <div className="inven-header">

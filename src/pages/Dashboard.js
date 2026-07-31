@@ -1,7 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { signOut } from "firebase/auth";
-import { auth } from "../lib/firebase";
-import NotificationBell from "../components/NotificationBell";
+import AppNav from "../components/AppNav";
 import "./Dashboard.css";
 
 const allModules = [
@@ -26,18 +24,7 @@ function Dashboard({ business, appUser }) {
 
   return (
     <div className="dash">
-      <nav className="dash-nav">
-        <div className="dash-nav-inner">
-          <span className="dash-wordmark">ASTORRA</span>
-          <div className="dash-nav-right">
-            <span className="dash-business">{business?.name}</span>
-            <NotificationBell business={business} />
-            <button className="dash-logout" onClick={() => signOut(auth)}>
-              Log out
-            </button>
-          </div>
-        </div>
-      </nav>
+      <AppNav business={business} showBack={false} />
 
       <div className="dash-body">
         <p className="dash-eyebrow">Dashboard</p>

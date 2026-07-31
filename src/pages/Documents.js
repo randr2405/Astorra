@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
+import AppNav from "../components/AppNav";
 import "./Documents.css";
 
 function formatBytes(bytes) {
@@ -12,7 +12,6 @@ function formatBytes(bytes) {
 }
 
 function Documents({ business, appUser }) {
-  const navigate = useNavigate();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -107,14 +106,7 @@ function Documents({ business, appUser }) {
 
   return (
     <div className="doc-page">
-      <nav className="doc-nav">
-        <div className="doc-nav-inner">
-          <button className="doc-back" onClick={() => navigate("/dashboard")}>
-            ← Dashboard
-          </button>
-          <span className="doc-wordmark">ASTORRA</span>
-        </div>
-      </nav>
+      <AppNav business={business} />
 
       <div className="doc-body">
         <div className="doc-header">

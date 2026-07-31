@@ -5,6 +5,7 @@ import { generateNumber } from "../lib/numbering";
 import { notify } from "../lib/notifications";
 import { generateQuotePdf, downloadPdf, pdfToBase64 } from "../lib/pdfGenerator";
 import { sendDocumentEmail } from "../lib/sendDocument";
+import AppNav from "../components/AppNav";
 import "./Quotes.css";
 
 const STATUSES = ["draft", "sent", "accepted", "declined"];
@@ -333,14 +334,7 @@ function Quotes({ business, appUser }) {
 
   return (
     <div className="quo-page">
-      <nav className="quo-nav">
-        <div className="quo-nav-inner">
-          <button className="quo-back" onClick={() => navigate("/dashboard")}>
-            ← Dashboard
-          </button>
-          <span className="quo-wordmark">ASTORRA</span>
-        </div>
-      </nav>
+      <AppNav business={business} />
 
       <div className="quo-body">
         <div className="quo-header">

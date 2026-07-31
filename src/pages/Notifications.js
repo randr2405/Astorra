@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import AppNav from "../components/AppNav";
 import "./Notifications.css";
 
 function formatDateTime(iso) {
@@ -15,7 +15,6 @@ function formatDateTime(iso) {
 }
 
 function Notifications({ business }) {
-  const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // all | unread
@@ -70,14 +69,7 @@ function Notifications({ business }) {
 
   return (
     <div className="notif-page">
-      <nav className="notif-nav">
-        <div className="notif-nav-inner">
-          <button className="notif-back" onClick={() => navigate("/dashboard")}>
-            ← Dashboard
-          </button>
-          <span className="notif-wordmark">ASTORRA</span>
-        </div>
-      </nav>
+      <AppNav business={business} />
 
       <div className="notif-body">
         <div className="notif-header">
