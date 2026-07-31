@@ -10,6 +10,20 @@ const checklistOptions = [
   { key: "staff", label: "We manage staff records" },
 ];
 
+const PLAN_LIMITS = {
+  free: 2,
+  starter: 5,
+  professional: 10,
+  enterprise: Infinity,
+};
+
+function capModulesToPlan(modules, plan) {
+  const limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
+  const withoutDocuments = modules.filter((m) => m !== "documents");
+  const capped = withoutDocuments.slice(0, limit);
+  return ["documents", ...capped];
+}
+
 function mapAnswersToModules(answers) {
   const modules = new Set();
   modules.add("documents");
@@ -57,7 +71,7 @@ function Onboarding({ firebaseUser, onComplete }) {
     setError("");
     setSubmitting(true);
 
-    const installedModules = mapAnswersToModules(answers);
+    const installedModules = capModulesToPlan(mapAnswersToModules(answers), "free");
 
     const { data: business, error: businessError } = await supabase
       .from("businesses")
@@ -75,19 +89,23 @@ function Onboarding({ firebaseUser, onComplete }) {
       return setError(businessError.message);
     }
 
-    const { error: userError } = await supabase.from("users").insert({
-      firebase_uid: firebaseUser.uid,
-      business_id: business.id,
-      email: firebaseUser.email,
-      role: "owner",
-    });
+    const { data: userRow, error: userError } = await supabase
+      .from("users")
+      .insert({
+        firebase_uid: firebaseUser.uid,
+        business_id: business.id,
+        email: firebaseUser.email,
+        role: "owner",
+      })
+      .select("*, businesses(*)")
+      .single();
 
     if (userError) {
       setSubmitting(false);
       return setError(userError.message);
     }
 
-    onComplete(business);
+    onComplete(business, userRow);
   };
 
   return (

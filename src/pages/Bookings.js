@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import { notify } from "../lib/notifications";
 import "./Bookings.css";
 
 const STATUSES = ["confirmed", "cancelled", "completed"];
@@ -32,7 +33,7 @@ function emptyForm() {
   return { title: "", customer_id: "", starts_at: "", ends_at: "", status: "confirmed" };
 }
 
-function Bookings({ business }) {
+function Bookings({ business, appUser }) {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -135,6 +136,8 @@ function Bookings({ business }) {
         setSaving(false);
         return setError(insertError.message);
       }
+
+      notify(business.id, appUser?.id, `New booking "${form.title}" was scheduled.`);
     }
 
     setSaving(false);
@@ -155,7 +158,10 @@ function Bookings({ business }) {
       .from("bookings")
       .update({ status: "cancelled" })
       .eq("id", booking.id);
-    if (!updateError) fetchBookings();
+    if (!updateError) {
+      notify(business.id, appUser?.id, `Booking "${booking.title}" was cancelled.`);
+      fetchBookings();
+    }
   };
 
   const filteredBookings = useMemo(() => {

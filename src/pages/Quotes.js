@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { generateNumber } from "../lib/numbering";
+import { notify } from "../lib/notifications";
 import "./Quotes.css";
 
 const STATUSES = ["draft", "sent", "accepted", "declined"];
@@ -17,7 +18,7 @@ function calcTotal(items) {
   );
 }
 
-function Quotes({ business }) {
+function Quotes({ business, appUser }) {
   const navigate = useNavigate();
   const [quotes, setQuotes] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -127,6 +128,18 @@ function Quotes({ business }) {
         return setError(updateError.message);
       }
 
+      if (form.status !== editingQuote.status) {
+        if (form.status === "sent") {
+          notify(business.id, appUser?.id, `Quote ${editingQuote.quote_number} was sent.`);
+        }
+        if (form.status === "accepted") {
+          notify(business.id, appUser?.id, `Quote ${editingQuote.quote_number} was accepted.`);
+        }
+        if (form.status === "declined") {
+          notify(business.id, appUser?.id, `Quote ${editingQuote.quote_number} was declined.`);
+        }
+      }
+
       await supabase.from("quote_line_items").delete().eq("quote_id", editingQuote.id);
 
       const { error: itemsError } = await supabase.from("quote_line_items").insert(
@@ -215,6 +228,7 @@ function Quotes({ business }) {
     });
 
     if (!convertError) {
+      notify(business.id, appUser?.id, `Quote ${quote.quote_number} was converted to invoice ${invoiceNumber}.`);
       navigate("/dashboard/invoices");
     }
   };

@@ -14,10 +14,12 @@ import Inventory from "./pages/Inventory";
 import Staff from "./pages/Staff";
 import Bookings from "./pages/Bookings";
 import Documents from "./pages/Documents";
+import Notifications from "./pages/Notifications";
 
 function App() {
   const [user, setUser] = useState(null);
   const [business, setBusiness] = useState(null);
+  const [appUser, setAppUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -30,14 +32,23 @@ function App() {
           .eq("firebase_uid", currentUser.uid)
           .maybeSingle();
 
-        if (data?.businesses) setBusiness(data.businesses);
+        if (data?.businesses) {
+          setBusiness(data.businesses);
+          setAppUser(data);
+        }
       } else {
         setBusiness(null);
+        setAppUser(null);
       }
       setLoading(false);
     });
     return unsubscribe;
   }, []);
+
+  const handleOnboardingComplete = (newBusiness, newAppUser) => {
+    setBusiness(newBusiness);
+    if (newAppUser) setAppUser(newAppUser);
+  };
 
   if (loading) return <p style={{ textAlign: "center", marginTop: "80px" }}>Loading...</p>;
 
@@ -67,7 +78,7 @@ function App() {
             ) : business ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              <Onboarding firebaseUser={user} onComplete={setBusiness} />
+              <Onboarding firebaseUser={user} onComplete={handleOnboardingComplete} />
             )
           }
         />
@@ -80,7 +91,7 @@ function App() {
             ) : !business ? (
               <Navigate to="/onboarding" replace />
             ) : (
-              <Dashboard business={business} />
+              <Dashboard business={business} appUser={appUser} />
             )
           }
         />
@@ -106,7 +117,7 @@ function App() {
             ) : !business ? (
               <Navigate to="/onboarding" replace />
             ) : (
-              <Quotes business={business} />
+              <Quotes business={business} appUser={appUser} />
             )
           }
         />
@@ -119,7 +130,7 @@ function App() {
             ) : !business ? (
               <Navigate to="/onboarding" replace />
             ) : (
-              <Invoices business={business} />
+              <Invoices business={business} appUser={appUser} />
             )
           }
         />
@@ -158,7 +169,7 @@ function App() {
             ) : !business ? (
               <Navigate to="/onboarding" replace />
             ) : (
-              <Bookings business={business} />
+              <Bookings business={business} appUser={appUser} />
             )
           }
         />
@@ -172,6 +183,19 @@ function App() {
               <Navigate to="/onboarding" replace />
             ) : (
               <Documents business={business} />
+            )
+          }
+        />
+
+        <Route
+          path="/dashboard/notifications"
+          element={
+            !user ? (
+              <Navigate to="/auth" replace />
+            ) : !business ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <Notifications business={business} />
             )
           }
         />

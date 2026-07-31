@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
+import NotificationBell from "../components/NotificationBell";
 import "./Dashboard.css";
 
 const allModules = [
@@ -13,7 +14,7 @@ const allModules = [
   { key: "documents", name: "Documents", desc: "Secure file storage for contracts and paperwork", initial: "D" },
 ];
 
-function Dashboard({ business }) {
+function Dashboard({ business, appUser }) {
   const navigate = useNavigate();
   const installed = business?.installed_modules || [];
 
@@ -30,6 +31,7 @@ function Dashboard({ business }) {
           <span className="dash-wordmark">ASTORRA</span>
           <div className="dash-nav-right">
             <span className="dash-business">{business?.name}</span>
+            <NotificationBell business={business} />
             <button className="dash-logout" onClick={() => signOut(auth)}>
               Log out
             </button>

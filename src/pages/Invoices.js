@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { generateNumber } from "../lib/numbering";
+import { notify } from "../lib/notifications";
 import "./Invoices.css";
 
 const STATUSES = ["unpaid", "paid", "overdue"];
 
-function Invoices({ business }) {
+function Invoices({ business, appUser }) {
   const navigate = useNavigate();
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -131,7 +132,10 @@ function Invoices({ business }) {
       .from("invoices")
       .update({ status: "paid" })
       .eq("id", invoice.id);
-    if (!updateError) fetchInvoices();
+    if (!updateError) {
+      notify(business.id, appUser?.id, `Invoice ${invoice.invoice_number} was marked as paid.`);
+      fetchInvoices();
+    }
   };
 
   return (
