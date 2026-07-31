@@ -60,6 +60,7 @@ function Documents({ business }) {
       business_id: business.id,
       name: file.name,
       storage_path: filePath,
+      size_bytes: file.size,
     });
 
     if (insertError) {
@@ -141,6 +142,7 @@ function Documents({ business }) {
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Size</th>
                   <th>Uploaded</th>
                   <th></th>
                 </tr>
@@ -149,6 +151,7 @@ function Documents({ business }) {
                 {documents.map((doc) => (
                   <tr key={doc.id}>
                     <td className="doc-name-cell">{doc.name}</td>
+                    <td className="doc-muted">{formatBytes(doc.size_bytes)}</td>
                     <td className="doc-muted">
                       {new Date(doc.created_at).toLocaleDateString("en-ZA")}
                     </td>
