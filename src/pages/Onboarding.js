@@ -12,6 +12,7 @@ const checklistOptions = [
 
 function mapAnswersToModules(answers) {
   const modules = new Set();
+  modules.add("documents");
 
   if (answers.quotes) {
     modules.add("quotes");

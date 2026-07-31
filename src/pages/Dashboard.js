@@ -10,6 +10,7 @@ const allModules = [
   { key: "inventory", name: "Inventory", desc: "Stock levels that stay accurate on their own", initial: "S" },
   { key: "staff", name: "Staff / HR", desc: "Records and basics, without a separate system", initial: "H" },
   { key: "bookings", name: "Bookings", desc: "Scheduling that updates the whole business", initial: "B" },
+  { key: "documents", name: "Documents", desc: "Secure file storage for contracts and paperwork", initial: "D" },
 ];
 
 function Dashboard({ business }) {

@@ -13,6 +13,7 @@ import Invoices from "./pages/Invoices";
 import Inventory from "./pages/Inventory";
 import Staff from "./pages/Staff";
 import Bookings from "./pages/Bookings";
+import Documents from "./pages/Documents";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -23,10 +24,6 @@ function App() {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // No manual token minting or session refresh needed here --
-        // supabaseClient.js's accessToken callback fetches a fresh
-        // Firebase ID token on every request automatically, and Supabase
-        // verifies it directly via the Firebase Third Party Auth provider.
         const { data } = await supabase
           .from("users")
           .select("*, businesses(*)")
@@ -47,10 +44,8 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Public landing page - always accessible */}
         <Route path="/" element={<Landing />} />
 
-        {/* Auth page - redirect to onboarding/dashboard if already logged in */}
         <Route
           path="/auth"
           element={
@@ -64,7 +59,6 @@ function App() {
           }
         />
 
-        {/* Onboarding - only for logged-in users without a business yet */}
         <Route
           path="/onboarding"
           element={
@@ -78,7 +72,6 @@ function App() {
           }
         />
 
-        {/* Dashboard - only for logged-in users with a business */}
         <Route
           path="/dashboard"
           element={
@@ -92,7 +85,6 @@ function App() {
           }
         />
 
-        {/* Customers module - only for logged-in users with a business */}
         <Route
           path="/dashboard/customers"
           element={
@@ -106,7 +98,6 @@ function App() {
           }
         />
 
-        {/* Quotes module - only for logged-in users with a business */}
         <Route
           path="/dashboard/quotes"
           element={
@@ -120,7 +111,6 @@ function App() {
           }
         />
 
-        {/* Invoices module - only for logged-in users with a business */}
         <Route
           path="/dashboard/invoices"
           element={
@@ -134,7 +124,6 @@ function App() {
           }
         />
 
-        {/* Inventory module - only for logged-in users with a business */}
         <Route
           path="/dashboard/inventory"
           element={
@@ -148,7 +137,6 @@ function App() {
           }
         />
 
-        {/* Staff module - only for logged-in users with a business */}
         <Route
           path="/dashboard/staff"
           element={
@@ -162,7 +150,6 @@ function App() {
           }
         />
 
-        {/* Bookings module - only for logged-in users with a business */}
         <Route
           path="/dashboard/bookings"
           element={
@@ -176,7 +163,19 @@ function App() {
           }
         />
 
-        {/* Catch-all: send unknown routes back home */}
+        <Route
+          path="/dashboard/documents"
+          element={
+            !user ? (
+              <Navigate to="/auth" replace />
+            ) : !business ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <Documents business={business} />
+            )
+          }
+        />
+
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
