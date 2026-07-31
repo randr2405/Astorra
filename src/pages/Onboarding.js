@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { capModulesToPlan } from "../lib/plans";
 import "./Onboarding.css";
 
 const checklistOptions = [
@@ -11,17 +12,7 @@ const checklistOptions = [
   { key: "documents", label: "We manage documents or paperwork" },
 ];
 
-const PLAN_LIMITS = {
-  free: 2,
-  starter: 5,
-  professional: 10,
-  enterprise: Infinity,
-};
-
-function capModulesToPlan(modules, plan) {
-  const limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
-  return modules.slice(0, limit);
-}
+const DEFAULT_PLAN = "free";
 
 function mapAnswersToModules(answers) {
   const modules = new Set();
@@ -73,13 +64,16 @@ function Onboarding({ firebaseUser, onComplete }) {
     setError("");
     setSubmitting(true);
 
-    const installedModules = capModulesToPlan(mapAnswersToModules(answers), "free");
+    // Every business starts on the Free plan. Upgrading (and any module
+    // count above the plan cap) happens later via Billing/Marketplace.
+    const installedModules = capModulesToPlan(mapAnswersToModules(answers), DEFAULT_PLAN);
 
     const { data: business, error: businessError } = await supabase
       .from("businesses")
       .insert({
         name: businessName,
         team_size: teamSize,
+        plan: DEFAULT_PLAN,
         installed_modules: installedModules,
         created_by: firebaseUser.uid,
       })

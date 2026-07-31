@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import NotificationBell from "./NotificationBell";
@@ -6,6 +6,9 @@ import "./AppNav.css";
 
 function AppNav({ business, showBack = true }) {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const isActive = (path) => location.pathname === path;
 
   return (
     <nav className="app-nav">
@@ -17,6 +20,21 @@ function AppNav({ business, showBack = true }) {
             </button>
           )}
           <span className="app-nav-wordmark">ASTORRA</span>
+        </div>
+
+        <div className="app-nav-links">
+          <button
+            className={`app-nav-link ${isActive("/dashboard/marketplace") ? "app-nav-link--active" : ""}`}
+            onClick={() => navigate("/dashboard/marketplace")}
+          >
+            Marketplace
+          </button>
+          <button
+            className={`app-nav-link ${isActive("/dashboard/billing") ? "app-nav-link--active" : ""}`}
+            onClick={() => navigate("/dashboard/billing")}
+          >
+            Billing
+          </button>
         </div>
 
         <div className="app-nav-right">

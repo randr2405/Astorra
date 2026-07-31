@@ -15,6 +15,8 @@ import Staff from "./pages/Staff";
 import Bookings from "./pages/Bookings";
 import Documents from "./pages/Documents";
 import Notifications from "./pages/Notifications";
+import Marketplace from "./pages/Marketplace";
+import Billing from "./pages/Billing";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -48,6 +50,13 @@ function App() {
   const handleOnboardingComplete = (newBusiness, newAppUser) => {
     setBusiness(newBusiness);
     if (newAppUser) setAppUser(newAppUser);
+  };
+
+  // Passed down to Marketplace/Billing so a plan switch or module
+  // install/uninstall is reflected immediately across the app (e.g. the
+  // Dashboard's module grid and plan strip) without a full reload.
+  const handleBusinessUpdate = (updatedBusiness) => {
+    setBusiness(updatedBusiness);
   };
 
   if (loading) return <p style={{ textAlign: "center", marginTop: "80px" }}>Loading...</p>;
@@ -196,6 +205,32 @@ function App() {
               <Navigate to="/onboarding" replace />
             ) : (
               <Notifications business={business} />
+            )
+          }
+        />
+
+        <Route
+          path="/dashboard/marketplace"
+          element={
+            !user ? (
+              <Navigate to="/auth" replace />
+            ) : !business ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <Marketplace business={business} appUser={appUser} onBusinessUpdate={handleBusinessUpdate} />
+            )
+          }
+        />
+
+        <Route
+          path="/dashboard/billing"
+          element={
+            !user ? (
+              <Navigate to="/auth" replace />
+            ) : !business ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <Billing business={business} appUser={appUser} onBusinessUpdate={handleBusinessUpdate} />
             )
           }
         />

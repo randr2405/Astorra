@@ -1,24 +1,19 @@
 import { useNavigate } from "react-router-dom";
 import AppNav from "../components/AppNav";
+import { MODULE_CATALOG, PLAN_DETAILS, getModuleLimit } from "../lib/plans";
 import "./Dashboard.css";
-
-const allModules = [
-  { key: "customers", name: "Customers", desc: "One record per customer, feeding everything else", initial: "C" },
-  { key: "quotes", name: "Quotes", desc: "Send a quote, know the moment it's viewed", initial: "Q" },
-  { key: "invoices", name: "Invoices", desc: "Convert quotes to invoices, track what's paid", initial: "I" },
-  { key: "inventory", name: "Inventory", desc: "Stock levels that stay accurate on their own", initial: "S" },
-  { key: "staff", name: "Staff / HR", desc: "Records and basics, without a separate system", initial: "H" },
-  { key: "bookings", name: "Bookings", desc: "Scheduling that updates the whole business", initial: "B" },
-  { key: "documents", name: "Documents", desc: "Secure file storage for contracts and paperwork", initial: "D" },
-];
 
 function Dashboard({ business, appUser }) {
   const navigate = useNavigate();
   const installed = business?.installed_modules || [];
+  const plan = business?.plan || "free";
+  const limit = getModuleLimit(plan);
 
   const handleModuleClick = (mod, active) => {
     if (active) {
-      navigate(`/dashboard/${mod.key}`);
+      navigate(`/dashboard/${mod.route}`);
+    } else {
+      navigate("/dashboard/marketplace");
     }
   };
 
@@ -31,9 +26,24 @@ function Dashboard({ business, appUser }) {
         <h1 className="dash-heading">Welcome back, {business?.name}</h1>
         <p className="dash-sub">Everything your business runs on, in one place.</p>
 
+        <div className="dash-plan-strip">
+          <span>
+            {PLAN_DETAILS[plan].name} plan · {installed.length} of{" "}
+            {limit === Infinity ? "unlimited" : limit} modules installed
+          </span>
+          <div className="dash-plan-actions">
+            <button className="dash-plan-link" onClick={() => navigate("/dashboard/marketplace")}>
+              Browse marketplace
+            </button>
+            <button className="dash-plan-link" onClick={() => navigate("/dashboard/billing")}>
+              Manage billing
+            </button>
+          </div>
+        </div>
+
         <p className="dash-section-label">Your modules</p>
         <div className="module-grid">
-          {allModules.map((mod) => {
+          {MODULE_CATALOG.map((mod) => {
             const active = installed.includes(mod.key);
             return (
               <div className="mod-card" key={mod.key} onClick={() => handleModuleClick(mod, active)}>
