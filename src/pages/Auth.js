@@ -3,29 +3,46 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signInWithPopup,
+  sendPasswordResetEmail,
   GoogleAuthProvider,
 } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import "./Auth.css";
 
+// "signup" | "login" | "reset"
 function Auth() {
-  const [isSignUp, setIsSignUp] = useState(true);
+  const [mode, setMode] = useState("signup");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [resetSent, setResetSent] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  const switchMode = (nextMode) => {
+    setMode(nextMode);
+    setError("");
+    setResetSent(false);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setSubmitting(true);
+
     try {
-      if (isSignUp) {
+      if (mode === "signup") {
         await createUserWithEmailAndPassword(auth, email, password);
-      } else {
+      } else if (mode === "login") {
         await signInWithEmailAndPassword(auth, email, password);
+      } else {
+        await sendPasswordResetEmail(auth, email);
+        setResetSent(true);
       }
     } catch (err) {
       setError(err.message);
     }
+
+    setSubmitting(false);
   };
 
   const handleGoogleSignIn = async () => {
@@ -38,48 +55,100 @@ function Auth() {
     }
   };
 
+  const heading =
+    mode === "signup" ? "Create your account" : mode === "login" ? "Log in" : "Reset your password";
+
   return (
     <div className="auth-page">
       <div className="auth-card">
         <p className="auth-wordmark">ASTORRA</p>
         <p className="auth-slogan">One platform. Your way.</p>
 
-        <h2 className="auth-heading">{isSignUp ? "Create your account" : "Log in"}</h2>
+        <h2 className="auth-heading">{heading}</h2>
 
-        <form onSubmit={handleSubmit}>
-          <input
-            className="auth-input"
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            className="auth-input"
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-          {error && <p className="auth-error">{error}</p>}
-          <button type="submit" className="auth-submit">
-            {isSignUp ? "Sign up" : "Log in"}
-          </button>
-        </form>
+        {mode === "reset" && !resetSent && (
+          <p className="auth-reset-hint">
+            Enter the email on your account and we'll send you a link to reset your password.
+          </p>
+        )}
 
-        <div className="auth-divider">or</div>
+        {resetSent ? (
+          <p className="auth-reset-sent">
+            If an account exists for <strong>{email}</strong>, a reset link is on its way. Check your
+            inbox.
+          </p>
+        ) : (
+          <form onSubmit={handleSubmit}>
+            <input
+              className="auth-input"
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+            />
 
-        <button onClick={handleGoogleSignIn} className="auth-google">
-          Continue with Google
-        </button>
+            {mode !== "reset" && (
+              <input
+                className="auth-input"
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+              />
+            )}
+
+            {error && <p className="auth-error">{error}</p>}
+
+            <button type="submit" className="auth-submit" disabled={submitting}>
+              {submitting
+                ? "Please wait..."
+                : mode === "signup"
+                ? "Sign up"
+                : mode === "login"
+                ? "Log in"
+                : "Send reset link"}
+            </button>
+          </form>
+        )}
+
+        {mode !== "reset" && (
+          <>
+            <div className="auth-divider">or</div>
+
+            <button onClick={handleGoogleSignIn} className="auth-google">
+              Continue with Google
+            </button>
+          </>
+        )}
 
         <p className="auth-switch">
-          {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
-          <button className="auth-switch-btn" onClick={() => setIsSignUp(!isSignUp)}>
-            {isSignUp ? "Log in" : "Sign up"}
-          </button>
+          {mode === "signup" && (
+            <>
+              Already have an account?{" "}
+              <button className="auth-switch-btn" onClick={() => switchMode("login")}>
+                Log in
+              </button>
+            </>
+          )}
+          {mode === "login" && (
+            <>
+              Don't have an account?{" "}
+              <button className="auth-switch-btn" onClick={() => switchMode("signup")}>
+                Sign up
+              </button>
+              <br />
+              <button className="auth-switch-btn auth-forgot-btn" onClick={() => switchMode("reset")}>
+                Forgot password?
+              </button>
+            </>
+          )}
+          {mode === "reset" && (
+            <button className="auth-switch-btn" onClick={() => switchMode("login")}>
+              Back to log in
+            </button>
+          )}
         </p>
       </div>
     </div>

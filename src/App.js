@@ -17,6 +17,7 @@ import Documents from "./pages/Documents";
 import Notifications from "./pages/Notifications";
 import Marketplace from "./pages/Marketplace";
 import Billing from "./pages/Billing";
+import AIBuilder from "./pages/AIBuilder";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -52,7 +53,7 @@ function App() {
     if (newAppUser) setAppUser(newAppUser);
   };
 
-  // Passed down to Marketplace/Billing so a plan switch or module
+  // Passed down to Marketplace/Billing/AIBuilder so a plan switch or module
   // install/uninstall is reflected immediately across the app (e.g. the
   // Dashboard's module grid and plan strip) without a full reload.
   const handleBusinessUpdate = (updatedBusiness) => {
@@ -231,6 +232,19 @@ function App() {
               <Navigate to="/onboarding" replace />
             ) : (
               <Billing business={business} appUser={appUser} onBusinessUpdate={handleBusinessUpdate} />
+            )
+          }
+        />
+
+        <Route
+          path="/dashboard/ai-builder"
+          element={
+            !user ? (
+              <Navigate to="/auth" replace />
+            ) : !business ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <AIBuilder business={business} appUser={appUser} onBusinessUpdate={handleBusinessUpdate} />
             )
           }
         />

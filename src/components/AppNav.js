@@ -24,6 +24,12 @@ function AppNav({ business, showBack = true }) {
 
         <div className="app-nav-links">
           <button
+            className={`app-nav-link ${isActive("/dashboard/ai-builder") ? "app-nav-link--active" : ""}`}
+            onClick={() => navigate("/dashboard/ai-builder")}
+          >
+            AI Builder
+          </button>
+          <button
             className={`app-nav-link ${isActive("/dashboard/marketplace") ? "app-nav-link--active" : ""}`}
             onClick={() => navigate("/dashboard/marketplace")}
           >

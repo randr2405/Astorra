@@ -1,0 +1,231 @@
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap");
+
+:root {
+  --navy: #0b0f1a;
+  --navy-raised: #111527;
+  --purple: #7c3aed;
+  --blue: #3b82f6;
+  --teal: #14b8a6;
+  --border: rgba(255, 255, 255, 0.08);
+  --slate: #6b7280;
+}
+
+.aib-page {
+  min-height: 100vh;
+  background: var(--navy);
+  color: #e7e9ef;
+  font-family: "Inter", sans-serif;
+}
+
+.aib-body {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+}
+
+.aib-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--teal);
+  margin: 0 0 10px;
+}
+
+.aib-heading {
+  font-family: "Sora", sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: #fdfdfe;
+  margin: 0 0 10px;
+}
+
+.aib-sub {
+  font-size: 15px;
+  color: var(--slate);
+  line-height: 1.6;
+  margin: 0 0 32px;
+}
+
+/* Form */
+.aib-form {
+  margin-bottom: 24px;
+}
+
+.aib-textarea {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  font-family: "Inter", sans-serif;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: #e7e9ef;
+  resize: vertical;
+  transition: border-color 0.15s ease;
+}
+.aib-textarea::placeholder {
+  color: var(--slate);
+}
+.aib-textarea:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+
+.aib-submit {
+  margin-top: 14px;
+  background: linear-gradient(135deg, var(--purple), var(--blue) 55%, var(--teal));
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 13px 24px;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 14.5px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 8px 24px -8px rgba(124, 58, 237, 0.5);
+}
+.aib-submit:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px -8px rgba(59, 130, 246, 0.55);
+}
+.aib-submit:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.aib-error {
+  font-size: 13.5px;
+  color: #f87171;
+  margin: 0 0 20px;
+}
+
+/* Result */
+.aib-result {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 28px;
+  animation: aib-fade-in 0.25s ease;
+}
+
+@keyframes aib-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.aib-reasoning {
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: #d7dae2;
+  margin: 0 0 22px;
+}
+
+.aib-module-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.aib-module-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.aib-module-icon {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Sora", sans-serif;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple), var(--blue) 55%, var(--teal));
+}
+
+.aib-module-card h3 {
+  font-family: "Sora", sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fdfdfe;
+  margin: 0 0 4px;
+}
+
+.aib-module-card p {
+  font-size: 13.5px;
+  color: var(--slate);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.aib-install-btn {
+  background: linear-gradient(135deg, var(--purple), var(--blue) 55%, var(--teal));
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 13px 24px;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 14.5px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 8px 24px -8px rgba(124, 58, 237, 0.5);
+}
+.aib-install-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px -8px rgba(59, 130, 246, 0.55);
+}
+.aib-install-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.aib-cap-notice {
+  font-size: 13.5px;
+  color: var(--slate);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.aib-inline-link {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: "Inter", sans-serif;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--blue);
+  cursor: pointer;
+}
+.aib-inline-link:hover {
+  color: var(--teal);
+}
+
+@media (max-width: 560px) {
+  .aib-body {
+    padding: 36px 20px 60px;
+  }
+  .aib-heading {
+    font-size: 24px;
+  }
+}
