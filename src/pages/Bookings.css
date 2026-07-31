@@ -1,0 +1,364 @@
+@import url("https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700&family=Inter:wght@400;500;600&display=swap");
+
+:root {
+  --navy: #0b0f1a;
+  --navy-raised: #111527;
+  --purple: #7c3aed;
+  --blue: #3b82f6;
+  --teal: #14b8a6;
+  --border: rgba(255, 255, 255, 0.08);
+  --slate: #6b7280;
+  --red: #f87171;
+  --amber: #f59e0b;
+}
+
+.book-page {
+  min-height: 100vh;
+  background: var(--navy);
+  color: #e7e9ef;
+  font-family: "Inter", sans-serif;
+}
+
+.book-nav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(11, 15, 26, 0.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+}
+.book-nav-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.book-back {
+  background: transparent;
+  border: none;
+  color: var(--slate);
+  font-family: "Inter", sans-serif;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.book-back:hover {
+  color: #e7e9ef;
+}
+.book-wordmark {
+  font-family: "Sora", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  font-size: 17px;
+  color: #fdfdfe;
+}
+
+.book-body {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 48px 32px 80px;
+}
+.book-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  gap: 20px;
+}
+.book-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--teal);
+  margin: 0 0 10px;
+}
+.book-heading {
+  font-family: "Sora", sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: #fdfdfe;
+  margin: 0;
+}
+.book-add-btn {
+  background: linear-gradient(135deg, var(--purple), var(--blue) 55%, var(--teal));
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 12px 22px;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 8px 24px -8px rgba(124, 58, 237, 0.5);
+}
+.book-add-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px -8px rgba(59, 130, 246, 0.55);
+}
+.book-add-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.book-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 28px;
+}
+.book-filter-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  color: var(--slate);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.book-filter-btn:hover {
+  color: #e7e9ef;
+  border-color: var(--blue);
+}
+.book-filter-btn--active {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: var(--blue);
+  color: #fdfdfe;
+}
+
+.book-empty {
+  text-align: center;
+  color: var(--slate);
+  font-size: 14.5px;
+  padding: 60px 20px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+}
+
+.book-agenda {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+.book-day-heading {
+  font-family: "Sora", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #d7dae2;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.book-day-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.book-card {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  flex-wrap: wrap;
+}
+.book-card-time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #d7dae2;
+  min-width: 90px;
+}
+.book-card-main {
+  flex: 1;
+  min-width: 160px;
+}
+.book-card-title {
+  font-weight: 600;
+  color: #fdfdfe;
+  margin: 0 0 2px;
+  font-size: 14.5px;
+}
+.book-card-customer {
+  margin: 0;
+  font-size: 13px;
+  color: var(--slate);
+}
+.book-status {
+  text-transform: capitalize;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.book-status--confirmed {
+  background: rgba(20, 184, 166, 0.14);
+  color: var(--teal);
+}
+.book-status--cancelled {
+  background: rgba(248, 113, 113, 0.14);
+  color: var(--red);
+}
+.book-status--completed {
+  background: rgba(59, 130, 246, 0.14);
+  color: var(--blue);
+}
+.book-card-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+.book-action-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: #e7e9ef;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+  white-space: nowrap;
+}
+.book-action-btn:hover {
+  border-color: var(--blue);
+}
+.book-action-btn--danger:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.book-muted {
+  color: var(--slate);
+}
+
+/* Modal */
+.book-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 20px;
+}
+.book-modal {
+  width: 100%;
+  max-width: 460px;
+  background: var(--navy-raised);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+.book-modal h2 {
+  font-family: "Sora", sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: #fdfdfe;
+  margin: 0 0 24px;
+}
+.book-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: #d7dae2;
+  margin: 0 0 6px;
+}
+.book-input,
+.book-select {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-family: "Inter", sans-serif;
+  font-size: 14.5px;
+  color: #e7e9ef;
+  transition: border-color 0.15s ease;
+  color-scheme: dark;
+}
+.book-select {
+  cursor: pointer;
+}
+.book-input::placeholder {
+  color: var(--slate);
+}
+.book-input:focus,
+.book-select:focus {
+  outline: none;
+  border-color: var(--blue);
+}
+.book-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.book-row-2 .book-input {
+  margin-bottom: 16px;
+}
+.book-modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+.book-modal-actions .book-add-btn {
+  flex: 1;
+}
+.book-cancel-btn {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: #e7e9ef;
+  border-radius: 10px;
+  padding: 12px 22px;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+.book-cancel-btn:hover {
+  border-color: var(--blue);
+}
+.book-error {
+  color: var(--red);
+  font-size: 13.5px;
+  margin: -8px 0 14px;
+}
+
+@media (max-width: 700px) {
+  .book-row-2 {
+    grid-template-columns: 1fr;
+  }
+  .book-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .book-card-actions {
+    margin-left: 0;
+    width: 100%;
+  }
+}
