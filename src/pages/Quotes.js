@@ -194,6 +194,8 @@ function Quotes({ business, appUser }) {
         setSaving(false);
         return setError(itemsError.message);
       }
+
+      notify(business.id, appUser?.id, `Quote ${quoteNumber} was created.`);
     }
 
     setSaving(false);
@@ -204,7 +206,10 @@ function Quotes({ business, appUser }) {
   const handleDelete = async (quote) => {
     if (!window.confirm(`Delete quote ${quote.quote_number}? This can't be undone.`)) return;
     const { error: deleteError } = await supabase.from("quotes").delete().eq("id", quote.id);
-    if (!deleteError) fetchQuotes();
+    if (!deleteError) {
+      notify(business.id, appUser?.id, `Quote ${quote.quote_number} was deleted.`);
+      fetchQuotes();
+    }
   };
 
   const handleConvertToInvoice = async (quote) => {

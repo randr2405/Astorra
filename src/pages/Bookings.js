@@ -117,6 +117,11 @@ function Bookings({ business, appUser }) {
     };
 
     if (editingBooking) {
+      const rescheduled =
+        payload.starts_at !== new Date(editingBooking.starts_at).toISOString() ||
+        (payload.ends_at || null) !==
+          (editingBooking.ends_at ? new Date(editingBooking.ends_at).toISOString() : null);
+
       const { error: updateError } = await supabase
         .from("bookings")
         .update(payload)
@@ -125,6 +130,10 @@ function Bookings({ business, appUser }) {
       if (updateError) {
         setSaving(false);
         return setError(updateError.message);
+      }
+
+      if (rescheduled) {
+        notify(business.id, appUser?.id, `Booking "${form.title}" was rescheduled.`);
       }
     } else {
       const { error: insertError } = await supabase.from("bookings").insert({
@@ -150,7 +159,10 @@ function Bookings({ business, appUser }) {
 
     const { error: deleteError } = await supabase.from("bookings").delete().eq("id", booking.id);
 
-    if (!deleteError) fetchBookings();
+    if (!deleteError) {
+      notify(business.id, appUser?.id, `Booking "${booking.title}" was deleted.`);
+      fetchBookings();
+    }
   };
 
   const handleCancel = async (booking) => {

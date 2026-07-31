@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import { notify } from "../lib/notifications";
 import "./Customers.css";
 
-function Customers({ business }) {
+function Customers({ business, appUser }) {
   const navigate = useNavigate();
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +87,8 @@ function Customers({ business }) {
         setSaving(false);
         return setError(insertError.message);
       }
+
+      notify(business.id, appUser?.id, `New customer "${form.name}" was added.`);
     }
 
     setSaving(false);
@@ -227,5 +230,5 @@ function Customers({ business }) {
     </div>
   );
 }
-//test
+
 export default Customers;

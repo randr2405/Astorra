@@ -114,6 +114,8 @@ function Invoices({ business, appUser }) {
         setSaving(false);
         return setError(insertError.message);
       }
+
+      notify(business.id, appUser?.id, `Invoice ${invoiceNumber} was created.`);
     }
 
     setSaving(false);
@@ -124,7 +126,10 @@ function Invoices({ business, appUser }) {
   const handleDelete = async (invoice) => {
     if (!window.confirm(`Delete invoice ${invoice.invoice_number}? This can't be undone.`)) return;
     const { error: deleteError } = await supabase.from("invoices").delete().eq("id", invoice.id);
-    if (!deleteError) fetchInvoices();
+    if (!deleteError) {
+      notify(business.id, appUser?.id, `Invoice ${invoice.invoice_number} was deleted.`);
+      fetchInvoices();
+    }
   };
 
   const handleMarkPaid = async (invoice) => {

@@ -104,7 +104,7 @@ function App() {
             ) : !business ? (
               <Navigate to="/onboarding" replace />
             ) : (
-              <Customers business={business} />
+              <Customers business={business} appUser={appUser} />
             )
           }
         />
@@ -143,7 +143,7 @@ function App() {
             ) : !business ? (
               <Navigate to="/onboarding" replace />
             ) : (
-              <Inventory business={business} />
+              <Inventory business={business} appUser={appUser} />
             )
           }
         />
@@ -156,7 +156,7 @@ function App() {
             ) : !business ? (
               <Navigate to="/onboarding" replace />
             ) : (
-              <Staff business={business} />
+              <Staff business={business} appUser={appUser} />
             )
           }
         />
@@ -182,7 +182,7 @@ function App() {
             ) : !business ? (
               <Navigate to="/onboarding" replace />
             ) : (
-              <Documents business={business} />
+              <Documents business={business} appUser={appUser} />
             )
           }
         />

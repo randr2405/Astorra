@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import { notify } from "../lib/notifications";
 import "./Staff.css";
 
-function Staff({ business }) {
+function Staff({ business, appUser }) {
   const navigate = useNavigate();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -96,6 +97,8 @@ function Staff({ business }) {
         setSaving(false);
         return setError(insertError.message);
       }
+
+      notify(business.id, appUser?.id, `${form.full_name} was added to the team.`);
     }
 
     setSaving(false);

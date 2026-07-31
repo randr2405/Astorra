@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import { notify } from "../lib/notifications";
 import "./Documents.css";
 
 function formatBytes(bytes) {
@@ -10,7 +11,7 @@ function formatBytes(bytes) {
   return `${(kb / 1024).toFixed(1)} MB`;
 }
 
-function Documents({ business }) {
+function Documents({ business, appUser }) {
   const navigate = useNavigate();
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -67,6 +68,8 @@ function Documents({ business }) {
       setUploading(false);
       return setError(insertError.message);
     }
+
+    notify(business.id, appUser?.id, `"${file.name}" was uploaded to Documents.`);
 
     setUploading(false);
     e.target.value = "";

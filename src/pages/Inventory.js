@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
+import { notify } from "../lib/notifications";
 import "./Inventory.css";
 
-function Inventory({ business }) {
+const LOW_STOCK_THRESHOLD = 5;
+
+function Inventory({ business, appUser }) {
   const navigate = useNavigate();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -64,14 +67,18 @@ function Inventory({ business }) {
 
     setSaving(true);
 
+    const newQuantity = Number(form.quantity);
     const payload = {
       name: form.name,
       sku: form.sku || null,
-      quantity: Number(form.quantity),
+      quantity: newQuantity,
       unit_cost: form.unit_cost === "" ? null : Number(form.unit_cost),
     };
 
     if (editingItem) {
+      const wasAboveThreshold = Number(editingItem.quantity) > LOW_STOCK_THRESHOLD;
+      const nowAtOrBelowThreshold = newQuantity <= LOW_STOCK_THRESHOLD;
+
       const { error: updateError } = await supabase
         .from("inventory_items")
         .update(payload)
@@ -80,6 +87,16 @@ function Inventory({ business }) {
       if (updateError) {
         setSaving(false);
         return setError(updateError.message);
+      }
+
+      // Only notify the moment stock crosses into low territory, not on
+      // every save while it stays low, to avoid spamming notifications.
+      if (wasAboveThreshold && nowAtOrBelowThreshold) {
+        notify(
+          business.id,
+          appUser?.id,
+          `"${form.name}" is running low (${newQuantity} left).`
+        );
       }
     } else {
       const { error: insertError } = await supabase.from("inventory_items").insert({
@@ -90,6 +107,16 @@ function Inventory({ business }) {
       if (insertError) {
         setSaving(false);
         return setError(insertError.message);
+      }
+
+      notify(business.id, appUser?.id, `New inventory item "${form.name}" was added.`);
+
+      if (newQuantity <= LOW_STOCK_THRESHOLD) {
+        notify(
+          business.id,
+          appUser?.id,
+          `"${form.name}" is starting off low on stock (${newQuantity} left).`
+        );
       }
     }
 
