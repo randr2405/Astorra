@@ -89,21 +89,33 @@ function Onboarding({ firebaseUser, onComplete }) {
       return setError(businessError.message);
     }
 
-    const { data: userRow, error: userError } = await supabase
-      .from("users")
-      .insert({
-        firebase_uid: firebaseUser.uid,
-        business_id: business.id,
-        email: firebaseUser.email,
-        role: "owner",
-      })
-      .select("*, businesses(*)")
-      .single();
+    // NOTE: intentionally not chaining .select().single() onto this insert.
+    // Chaining a select onto an insert makes PostgREST insert the row AND
+    // then read it back (including the joined businesses(*) data), and that
+    // read-back is subject to SELECT policies, not the INSERT policy. That
+    // was producing an RLS error that looked like it came from the insert
+    // itself. Doing a plain insert avoids that read-back entirely.
+    const { error: userError } = await supabase.from("users").insert({
+      firebase_uid: firebaseUser.uid,
+      business_id: business.id,
+      email: firebaseUser.email,
+      role: "owner",
+    });
 
     if (userError) {
       setSubmitting(false);
       return setError(userError.message);
     }
+
+    // Build the userRow shape locally from data we already have, since we
+    // no longer fetch it back from Supabase as part of the insert.
+    const userRow = {
+      firebase_uid: firebaseUser.uid,
+      business_id: business.id,
+      email: firebaseUser.email,
+      role: "owner",
+      businesses: business,
+    };
 
     onComplete(business, userRow);
   };
