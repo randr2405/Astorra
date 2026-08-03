@@ -61,6 +61,7 @@ function Auth() {
         setResetSent(true);
       }
     } catch (err) {
+      console.error("Auth error:", err);
       const message = friendlyAuthError(err.code);
       if (message) setError(message);
     }
@@ -74,6 +75,7 @@ function Auth() {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     } catch (err) {
+      console.error("Google sign-in error:", err);
       const message = friendlyAuthError(err.code);
       if (message) setError(message);
     }
@@ -84,6 +86,22 @@ function Auth() {
 
   return (
     <div className="auth-page">
+      <div className="auth-bg">
+        <span className="auth-orb auth-orb-1"></span>
+        <span className="auth-orb auth-orb-2"></span>
+        <span className="auth-orb auth-orb-3"></span>
+        <span className="auth-orb auth-orb-4"></span>
+        <span className="auth-particle auth-particle-1"></span>
+        <span className="auth-particle auth-particle-2"></span>
+        <span className="auth-particle auth-particle-3"></span>
+        <span className="auth-particle auth-particle-4"></span>
+        <span className="auth-particle auth-particle-5"></span>
+        <span className="auth-particle auth-particle-6"></span>
+        <span className="auth-particle auth-particle-7"></span>
+        <span className="auth-particle auth-particle-8"></span>
+        <div className="auth-grid"></div>
+      </div>
+
       <div className="auth-card" key={mode}>
         <p className="auth-wordmark">ASTORRA</p>
         <p className="auth-slogan">One platform. Your way.</p>
