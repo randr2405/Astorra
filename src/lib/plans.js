@@ -12,9 +12,9 @@ export const PLAN_LIMITS = {
 
 export const PLAN_DETAILS = {
   free: { name: "Free", price: "R0", cadence: "/pm", ai: "Not included", extraModulePrice: "R49 / module / pm" },
-  starter: { name: "Starter", price: "R249", cadence: "/pm", ai: "Basic AI included", extraModulePrice: "R39 / module / pm" },
-  professional: { name: "Professional", price: "R799", cadence: "/pm", ai: "Full AI included", extraModulePrice: "R79 / module / pm (premium AI only)" },
-  enterprise: { name: "Enterprise", price: "R1,499", cadence: "/pm", ai: "Full AI included", extraModulePrice: "R79 / module / pm (premium AI only)" },
+  starter: { name: "Starter", price: "R249", cadence: "/pm", ai: "Limited AI (5 requests/mo)", extraModulePrice: "R39 / module / pm" },
+  professional: { name: "Professional", price: "R799", cadence: "/pm", ai: "Business AI (30 requests/mo)", extraModulePrice: "R79 / module / pm (premium AI only)" },
+  enterprise: { name: "Enterprise", price: "R1,499", cadence: "/pm", ai: "Unlimited AI", extraModulePrice: "R79 / module / pm (premium AI only)" },
 };
 
 // AI Builder access per plan.
