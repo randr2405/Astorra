@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Continue to PayFast</title>
+    <style>
+      body { font-family: sans-serif; text-align: center; padding-top: 100px; }
+      button {
+        padding: 16px 32px; font-size: 17px; cursor: pointer;
+        background: #7C3AED; color: white; border: none; border-radius: 8px;
+      }
+      p { color: #444; margin-bottom: 24px; }
+    </style>
+  </head>
+  <body>
+    <p>Click below to securely complete payment on PayFast.</p>
+    <form action="https://sandbox.payfast.co.za/eng/process" method="post">
+      <input type="hidden" name="merchant_id" value="29136835" />
+<input type="hidden" name="merchant_key" value="flhkez5qko0da" />
+<input type="hidden" name="return_url" value="https://astorra.vercel.app/dashboard/billing?payment=success" />
+<input type="hidden" name="cancel_url" value="https://astorra.vercel.app/dashboard/billing?payment=cancelled" />
+<input type="hidden" name="notify_url" value="https://gisaprmkqptyqrspkdlj.supabase.co/functions/v1/payfast-notify" />
+<input type="hidden" name="name_first" value="R&amp;R Agencies" />
+<input type="hidden" name="email_address" value="info@rragencies.co.za" />
+<input type="hidden" name="m_payment_id" value="c64fd2d2-62e3-4192-8c15-f940e6961e97:starter:1785740124940" />
+<input type="hidden" name="amount" value="249.00" />
+<input type="hidden" name="item_name" value="Astorra Starter plan" />
+<input type="hidden" name="item_description" value="Monthly subscription to the Astorra starter plan" />
+<input type="hidden" name="custom_str1" value="c64fd2d2-62e3-4192-8c15-f940e6961e97" />
+<input type="hidden" name="custom_str2" value="starter" />
+<input type="hidden" name="subscription_type" value="1" />
+<input type="hidden" name="recurring_amount" value="249.00" />
+<input type="hidden" name="frequency" value="3" />
+<input type="hidden" name="cycles" value="0" />
+      <input type="hidden" name="signature" value="bf8b1dcc5fdbdc63cc1e6619eb6fd6e8" />
+      <button type="submit">Continue to PayFast</button>
+    </form>
+  </body>
+</html>

@@ -69,9 +69,43 @@ function Billing({ business, appUser, onBusinessUpdate }) {
 
     // Paid plans go through PayFast. The plan does NOT change here — it
     // only changes once payfast-notify confirms the payment server-side.
-    // We just send the browser off to PayFast's hosted checkout.
+    //
+    // Supabase's edge runtime forces a sandboxed CSP + text/plain on every
+    // function response, so it can't serve an HTML auto-submit page itself.
+    // Instead the function returns the signed fields as JSON, and we build
+    // and submit the actual form to PayFast from here.
     setSwitchingTo(planKey);
-    window.location.href = `${FUNCTIONS_URL}/payfast-checkout?business_id=${business.id}&plan=${planKey}`;
+    setError("");
+
+    try {
+      const response = await fetch(
+        `${FUNCTIONS_URL}/payfast-checkout?business_id=${business.id}&plan=${planKey}`
+      );
+
+      if (!response.ok) {
+        throw new Error(`Checkout setup failed (${response.status})`);
+      }
+
+      const { action, fields } = await response.json();
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = action;
+
+      Object.entries(fields).forEach(([key, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
+    } catch (err) {
+      setSwitchingTo(null);
+      setError(`Could not start checkout: ${err.message}`);
+    }
   };
 
   return (

@@ -20,10 +20,6 @@ const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-function htmlEscape(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-}
-
 Deno.serve(async (req) => {
   const url = new URL(req.url);
   const businessId = url.searchParams.get("business_id");
@@ -82,35 +78,25 @@ Deno.serve(async (req) => {
 
   const signature = generateSignature(orderedEntries, PASSPHRASE);
 
-  const inputs = orderedEntries
-    .filter(([, v]) => v !== "")
-    .map(([k, v]) => `<input type="hidden" name="${k}" value="${htmlEscape(v)}" />`)
-    .join("\n");
+  // Supabase's edge runtime forces `Content-Type: text/plain` and a
+  // sandboxed CSP on every response, regardless of what we set here — so
+  // we can't serve an HTML auto-submit page directly from this domain.
+  // Instead we hand back the signed fields as JSON, and the calling React
+  // app (running on Vercel, not sandboxed) builds and submits the actual
+  // form to PayFast.
+  const fields = Object.fromEntries(orderedEntries.filter(([, v]) => v !== ""));
+  fields.signature = signature;
 
-  const html = `<!DOCTYPE html>
-<html>
-  <head>
-    <title>Continue to PayFast</title>
-    <style>
-      body { font-family: sans-serif; text-align: center; padding-top: 100px; }
-      button {
-        padding: 16px 32px; font-size: 17px; cursor: pointer;
-        background: #7C3AED; color: white; border: none; border-radius: 8px;
-      }
-      p { color: #444; margin-bottom: 24px; }
-    </style>
-  </head>
-  <body>
-    <p>Click below to securely complete payment on PayFast.</p>
-    <form action="https://${PAYFAST_HOST}/eng/process" method="post">
-      ${inputs}
-      <input type="hidden" name="signature" value="${signature}" />
-      <button type="submit">Continue to PayFast</button>
-    </form>
-  </body>
-</html>`;
-
-  return new Response(html, { headers: { "Content-Type": "text/html" } });
+  return new Response(
+    JSON.stringify({
+      action: `https://${PAYFAST_HOST}/eng/process`,
+      fields,
+    }),
+    {
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+      },
+    }
+  );
 });
-
-//need to deploy
