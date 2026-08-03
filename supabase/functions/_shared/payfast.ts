@@ -1,126 +1,111 @@
-// POST /functions/v1/payfast-notify
+// Shared PayFast helpers: signature generation (outgoing requests) and
+// signature verification (incoming ITN webhook), plus the plan -> price map.
 //
-// PayFast's server calls this directly (server-to-server) after a payment
-// succeeds, and again on every future recurring charge. This is the ONLY
-// place a business's plan should actually change — never trust the
-// checkout redirect alone, since a browser round-trip can be interrupted
-// or spoofed.
+// PayFast quirk that trips people up: the signature is built from params
+// IN THE ORDER THEY ARE SENT (not alphabetical), skipping any empty values
+// and skipping "signature" itself. Values must be URL-encoded PHP-style
+// (spaces become "+", not "%20"), then the passphrase is appended as its
+// own "&passphrase=..." pair, and the whole string is MD5-hashed.
 //
-// Must respond fast with a 200, and PayFast expects no particular body.
+// IMPORTANT ASYMMETRY: that "skip empty values" rule only applies to
+// OUTGOING requests we build ourselves (checkout), where we simply never
+// include a field we don't want to send. It does NOT apply to verifying
+// an INCOMING ITN payload — PayFast includes every field it sends, even
+// empty ones (e.g. custom_str3=, custom_int1=, name_last=), in its own
+// signature calculation. If we filter those out before re-hashing, our
+// signature won't match PayFast's, even with the correct passphrase.
+// See verifyItnSignature() below, which intentionally does NOT filter.
 
-import { createClient } from "npm:@supabase/supabase-js@2";
-import { verifyItnSignature, confirmWithPayFast } from "../_shared/payfast.ts";
+import { createHash } from "node:crypto";
 
-const PASSPHRASE = Deno.env.get("PAYFAST_PASSPHRASE")!;
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+export const PAYFAST_HOST = Deno.env.get("PAYFAST_SANDBOX") === "true"
+  ? "sandbox.payfast.co.za"
+  : "www.payfast.co.za";
 
-const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-// Mirrors src/lib/plans.js — kept in sync manually since edge functions
-// can't import from the React app's src/ directory.
-const PLAN_LIMITS: Record<string, number> = {
-  free: 2,
-  starter: 5,
-  professional: 10,
-  enterprise: Infinity,
+export const PLAN_PRICES: Record<string, number> = {
+  starter: 249,
+  professional: 799,
+  enterprise: 1499,
+  // "free" is intentionally excluded — it never goes through PayFast.
 };
 
-Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+export const PLAN_FREQUENCY = 3; // PayFast code for "monthly"
+export const PLAN_CYCLES = 0; // 0 = bill indefinitely until cancelled
+
+function phpUrlEncode(value: string): string {
+  return encodeURIComponent(value)
+    .replace(/%20/g, "+")
+    .replace(/[!'()*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+}
+
+/**
+ * Builds the PayFast signature from an ordered list of [key, value] pairs,
+ * for OUTGOING requests we construct ourselves (e.g. checkout).
+ *
+ * Filters out empty/undefined/null values, because we control exactly
+ * which fields we send and simply omit anything blank rather than
+ * sending it as an empty string. Pass entries in the exact order PayFast
+ * should see them.
+ */
+export function generateSignature(
+  orderedEntries: [string, string][],
+  passphrase: string
+): string {
+  const parts = orderedEntries
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => `${k}=${phpUrlEncode(String(v).trim())}`);
+
+  let queryString = parts.join("&");
+  if (passphrase) {
+    queryString += `&passphrase=${phpUrlEncode(passphrase)}`;
   }
 
-  const rawBody = await req.text();
-  const params = new URLSearchParams(rawBody);
-  const bodyEntries: [string, string][] = Array.from(params.entries());
-  const data = Object.fromEntries(bodyEntries);
+  return createHash("md5").update(queryString).digest("hex");
+}
 
-  // 1. Signature check
-  if (!verifyItnSignature(bodyEntries, PASSPHRASE)) {
-    console.error("PayFast ITN: signature mismatch", data.m_payment_id);
-    return new Response("Invalid signature", { status: 400 });
+/**
+ * Verifies an incoming ITN payload's signature against what we'd compute
+ * ourselves, using the *order fields arrived in the POST body*.
+ *
+ * Unlike generateSignature() above, this does NOT filter out empty
+ * values — PayFast's own signature includes every field it sent, blank
+ * or not, so we must mirror that exactly to get a matching hash.
+ */
+export function verifyItnSignature(
+  bodyEntries: [string, string][],
+  passphrase: string
+): boolean {
+  const receivedSignature = bodyEntries.find(([k]) => k === "signature")?.[1];
+  if (!receivedSignature) return false;
+
+  const entriesWithoutSignature = bodyEntries.filter(([k]) => k !== "signature");
+
+  const parts = entriesWithoutSignature.map(([k, v]) => `${k}=${phpUrlEncode(String(v))}`);
+  let queryString = parts.join("&");
+  if (passphrase) {
+    queryString += `&passphrase=${phpUrlEncode(passphrase)}`;
   }
+  const expected = createHash("md5").update(queryString).digest("hex");
 
-  // 2. Server-to-server confirmation with PayFast itself
-  const confirmed = await confirmWithPayFast(rawBody);
-  if (!confirmed) {
-    console.error("PayFast ITN: could not confirm with PayFast", data.m_payment_id);
-    return new Response("Could not confirm", { status: 400 });
-  }
+  return expected === receivedSignature;
+}
 
-  const businessId = data.custom_str1;
-  const plan = data.custom_str2;
-  const status = data.payment_status; // "COMPLETE", "FAILED", "CANCELLED", etc.
-  const pfPaymentId = data.pf_payment_id;
-  const token = data.token || null; // subscription token, used for later cancellation
-  const amount = data.amount_gross || data.amount || "0";
-
-  if (!businessId || !plan) {
-    console.error("PayFast ITN: missing custom_str1/custom_str2", data);
-    return new Response("Missing business/plan reference", { status: 400 });
-  }
-
-  // 3. Idempotency — PayFast can and will retry ITNs. If we've already
-  // recorded this pf_payment_id, just acknowledge and stop.
-  const { data: existing } = await supabase
-    .from("subscription_payments")
-    .select("id")
-    .eq("pf_payment_id", pfPaymentId)
-    .maybeSingle();
-
-  if (existing) {
-    return new Response("OK", { status: 200 });
-  }
-
-  await supabase.from("subscription_payments").insert({
-    business_id: businessId,
-    plan,
-    pf_payment_id: pfPaymentId,
-    token,
-    amount: Number(amount),
-    status,
-    raw_payload: data,
-  });
-
-  if (status === "COMPLETE") {
-    const { data: business } = await supabase
-      .from("businesses")
-      .select("installed_modules")
-      .eq("id", businessId)
-      .single();
-
-    const limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
-    const installed = business?.installed_modules || [];
-    const cappedModules = limit === Infinity ? installed : installed.slice(0, limit);
-
-    await supabase
-      .from("businesses")
-      .update({
-        plan,
-        installed_modules: cappedModules,
-        payfast_token: token,
-        subscription_status: "active",
-      })
-      .eq("id", businessId);
-
-    await supabase.from("notifications").insert({
-      business_id: businessId,
-      user_id: null,
-      message: `Payment received — your plan is now ${plan.charAt(0).toUpperCase() + plan.slice(1)}.`,
+/**
+ * Server-to-server confirmation with PayFast, required in addition to the
+ * signature check — PayFast recommends never trusting an ITN on signature
+ * alone, since the request itself could still be replayed or spoofed if
+ * the passphrase ever leaked. This asks PayFast directly "did you send this".
+ */
+export async function confirmWithPayFast(rawBody: string): Promise<boolean> {
+  try {
+    const response = await fetch(`https://${PAYFAST_HOST}/eng/query/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: rawBody,
     });
-  } else if (status === "FAILED" || status === "CANCELLED") {
-    await supabase
-      .from("businesses")
-      .update({ subscription_status: status.toLowerCase() })
-      .eq("id", businessId);
-
-    await supabase.from("notifications").insert({
-      business_id: businessId,
-      user_id: null,
-      message: `Your PayFast payment for the ${plan} plan was ${status.toLowerCase()}.`,
-    });
+    const text = await response.text();
+    return text.trim() === "VALID";
+  } catch {
+    return false;
   }
-
-  return new Response("OK", { status: 200 });
-});
+}
