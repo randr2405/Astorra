@@ -1,171 +1,210 @@
 import jsPDF from "jspdf";
 
-const BRAND_BLUE = [59, 130, 246];
-const BRAND_BLUE_LIGHT = [55, 138, 221];
-const BG_TINT = [232, 238, 245];
-const TEXT_MUTED = [120, 130, 140];
+// Refined, understated palette — a single ink color plus warm neutrals,
+// no loud color blocks. Elegance here comes from spacing and restraint,
+// not saturation.
+const INK = [30, 32, 36];          // near-black for headings/body
+const MUTED = [130, 132, 138];     // secondary text
+const HAIRLINE = [225, 226, 230];  // thin rules and dividers
+const ACCENT = [24, 60, 92];       // deep, muted navy — used sparingly
+const PAPER_TINT = [248, 248, 247]; // near-white row tint
 
-function statusColor(status) {
+function statusLabel(status) {
   const map = {
-    paid: [34, 139, 87],
-    accepted: [34, 139, 87],
-    unpaid: [200, 140, 30],
-    sent: [55, 100, 200],
-    draft: [140, 140, 140],
-    overdue: [190, 60, 60],
-    declined: [190, 60, 60],
+    paid: "Paid",
+    accepted: "Accepted",
+    unpaid: "Unpaid",
+    sent: "Sent",
+    draft: "Draft",
+    overdue: "Overdue",
+    declined: "Declined",
   };
-  return map[status] || [120, 120, 120];
+  return map[status] || status;
+}
+
+function statusInkColor(status) {
+  const map = {
+    paid: [40, 110, 76],
+    accepted: [40, 110, 76],
+    unpaid: [150, 108, 30],
+    sent: [45, 82, 140],
+    draft: [120, 120, 120],
+    overdue: [155, 60, 55],
+    declined: [155, 60, 55],
+  };
+  return map[status] || MUTED;
 }
 
 function buildDocPdf({ type, number, business, customer, items, total, status }) {
   const doc = new jsPDF();
   const pageWidth = 210;
-  const marginX = 20;
+  const marginX = 24;
   const contentWidth = pageWidth - marginX * 2;
+  const label = type === "invoice" ? "Invoice" : "Quote";
 
-  // Header banner
-  doc.setFillColor(...BRAND_BLUE);
-  doc.rect(0, 0, pageWidth, 38, "F");
-  doc.setFillColor(...BRAND_BLUE_LIGHT);
-  doc.rect(0, 36, pageWidth, 2, "F");
+  let y = 26;
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(20);
-  doc.setFont(undefined, "bold");
-  doc.text(business?.name || "Your Business", marginX, 20);
+  // ---- Letterhead ----
+  // Business name set as the visual anchor, quiet and confident —
+  // no color banner, just weight and spacing to establish hierarchy.
+  doc.setTextColor(...INK);
+  doc.setFont("times", "bold");
+  doc.setFontSize(22);
+  doc.text(business?.name || "Your Business", marginX, y);
 
+  doc.setFont("times", "italic");
   doc.setFontSize(10);
-  doc.setFont(undefined, "normal");
-  doc.text("One platform. Your way.", marginX, 28);
+  doc.setTextColor(...MUTED);
+  doc.text("One platform. Your way.", marginX, y + 6);
 
-  // Doc type + number, right aligned
-  doc.setFontSize(16);
-  doc.setFont(undefined, "bold");
-  const label = type === "invoice" ? "INVOICE" : "QUOTE";
-  doc.text(label, pageWidth - marginX, 18, { align: "right" });
-  doc.setFontSize(11);
-  doc.setFont(undefined, "normal");
-  doc.text(number, pageWidth - marginX, 26, { align: "right" });
-
-  let y = 52;
-
-  // Status badge
-  const sColor = statusColor(status);
-  const badgeText = status.toUpperCase();
+  // Document type + number, right aligned, restrained size
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  const badgeWidth = doc.getTextWidth(badgeText) + 10;
-  doc.setFillColor(...sColor);
-  doc.roundedRect(marginX, y - 5, badgeWidth, 7, 2, 2, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFont(undefined, "bold");
-  doc.text(badgeText, marginX + 5, y);
+  doc.setTextColor(...MUTED);
+  doc.text(label.toUpperCase(), pageWidth - marginX, y - 5, { align: "right" });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  doc.setTextColor(...INK);
+  doc.text(number, pageWidth - marginX, y + 2, { align: "right" });
 
-  doc.setTextColor(...TEXT_MUTED);
-  doc.setFont(undefined, "normal");
-  doc.text(`Date: ${new Date().toLocaleDateString("en-ZA")}`, pageWidth - marginX, y, { align: "right" });
+  y += 16;
+  doc.setDrawColor(...ACCENT);
+  doc.setLineWidth(0.6);
+  doc.line(marginX, y, pageWidth - marginX, y);
+
+  y += 12;
+
+  // ---- Bill To / Status / Date row ----
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...MUTED);
+  doc.text("BILLED TO", marginX, y);
+
+  doc.text("STATUS", pageWidth - marginX - 55, y);
+  doc.text("DATE", pageWidth - marginX, y, { align: "right" });
+
+  y += 7;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11.5);
+  doc.setTextColor(...INK);
+  doc.text(customer?.name || "—", marginX, y);
+
+  const sColor = statusInkColor(status);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.setTextColor(...sColor);
+  doc.text(statusLabel(status), pageWidth - marginX - 55, y);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10.5);
+  doc.setTextColor(...INK);
+  doc.text(new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }), pageWidth - marginX, y, { align: "right" });
+
+  if (customer?.email) {
+    y += 6;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...MUTED);
+    doc.text(customer.email, marginX, y);
+  }
 
   y += 14;
 
-  // Bill To block
-  doc.setDrawColor(...BG_TINT);
-  doc.setFillColor(...BG_TINT);
-  doc.roundedRect(marginX, y, contentWidth, 26, 2, 2, "F");
+  // ---- Line items table ----
+  const colDesc = marginX;
+  const colQty = marginX + 112;
+  const colPrice = marginX + 134;
+  const colTotal = pageWidth - marginX;
 
-  doc.setTextColor(...BRAND_BLUE);
-  doc.setFontSize(9);
-  doc.setFont(undefined, "bold");
-  doc.text("BILL TO", marginX + 6, y + 8);
+  doc.setDrawColor(...INK);
+  doc.setLineWidth(0.4);
+  doc.line(marginX, y, pageWidth - marginX, y);
+  y += 7;
 
-  doc.setTextColor(30, 30, 30);
-  doc.setFontSize(11);
-  doc.text(customer?.name || "—", marginX + 6, y + 15);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...MUTED);
+  doc.text("DESCRIPTION", colDesc, y);
+  doc.text("QTY", colQty, y);
+  doc.text("UNIT PRICE", colPrice, y);
+  doc.text("AMOUNT", colTotal, y, { align: "right" });
 
-  doc.setFontSize(9);
-  doc.setTextColor(...TEXT_MUTED);
-  doc.setFont(undefined, "normal");
-  if (customer?.email) {
-    doc.text(customer.email, marginX + 6, y + 21);
-  }
+  y += 4;
+  doc.setDrawColor(...HAIRLINE);
+  doc.setLineWidth(0.3);
+  doc.line(marginX, y, pageWidth - marginX, y);
 
-  y += 38;
-
-  // Table header
-  doc.setFillColor(...BRAND_BLUE);
-  doc.rect(marginX, y, contentWidth, 9, "F");
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9);
-  doc.setFont(undefined, "bold");
-  doc.text("DESCRIPTION", marginX + 3, y + 6);
-  doc.text("QTY", marginX + 108, y + 6);
-  doc.text("UNIT PRICE", marginX + 128, y + 6);
-  doc.text("LINE TOTAL", marginX + 160, y + 6);
-  y += 9;
-
-  doc.setTextColor(30, 30, 30);
-  doc.setFont(undefined, "normal");
+  y += 8;
 
   const rows = items && items.length ? items : [];
-  rows.forEach((item, i) => {
+
+  if (rows.length === 0) {
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(9.5);
+    doc.setTextColor(...MUTED);
+    doc.text("No line items.", colDesc, y);
+    y += 10;
+  }
+
+  rows.forEach((item) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unit_price) || 0;
     const lineTotal = qty * price;
-    const rowHeight = 9;
 
-    if (i % 2 === 1) {
-      doc.setFillColor(...BG_TINT);
-      doc.rect(marginX, y, contentWidth, rowHeight, "F");
-    }
-
-    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(...INK);
     const desc = doc.splitTextToSize(item.description || "", 100);
-    doc.text(desc[0] || "", marginX + 3, y + 6);
-    doc.text(String(qty), marginX + 108, y + 6);
-    doc.text(`R${price.toFixed(2)}`, marginX + 128, y + 6);
-    doc.setFont(undefined, "bold");
-    doc.text(`R${lineTotal.toFixed(2)}`, marginX + 160, y + 6);
-    doc.setFont(undefined, "normal");
+    doc.text(desc[0] || "", colDesc, y);
+    doc.text(String(qty), colQty, y);
+    doc.text(`R ${price.toFixed(2)}`, colPrice, y);
+    doc.text(`R ${lineTotal.toFixed(2)}`, colTotal, y, { align: "right" });
 
-    y += rowHeight;
+    y += 9;
+    doc.setDrawColor(...HAIRLINE);
+    doc.setLineWidth(0.2);
+    doc.line(marginX, y - 3.5, pageWidth - marginX, y - 3.5);
 
-    if (y > 250) {
+    if (y > 245) {
       doc.addPage();
-      y = 20;
+      y = 24;
     }
   });
 
-  if (rows.length === 0) {
-    doc.setFontSize(9);
-    doc.setTextColor(...TEXT_MUTED);
-    doc.text("No line items.", marginX + 3, y + 6);
-    y += 9;
-  }
+  // ---- Total ----
+  y += 6;
+  doc.setDrawColor(...ACCENT);
+  doc.setLineWidth(0.6);
+  doc.line(pageWidth - marginX - 75, y, pageWidth - marginX, y);
+  y += 9;
 
-  // Total box
-  y += 8;
-  doc.setDrawColor(...BRAND_BLUE);
-  doc.setFillColor(...BRAND_BLUE);
-  const totalBoxWidth = 70;
-  doc.roundedRect(pageWidth - marginX - totalBoxWidth, y, totalBoxWidth, 16, 2, 2, "F");
-  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  doc.setFont(undefined, "normal");
-  doc.text("TOTAL", pageWidth - marginX - totalBoxWidth + 6, y + 6);
-  doc.setFontSize(14);
-  doc.setFont(undefined, "bold");
-  doc.text(`R${Number(total).toFixed(2)}`, pageWidth - marginX - 6, y + 12, { align: "right" });
+  doc.setTextColor(...MUTED);
+  doc.text("TOTAL DUE", pageWidth - marginX - 75, y);
 
-  // Footer
+  doc.setFont("times", "bold");
+  doc.setFontSize(17);
+  doc.setTextColor(...ACCENT);
+  doc.text(`R ${Number(total).toFixed(2)}`, pageWidth - marginX, y + 1, { align: "right" });
+
+  // ---- Footer ----
   const pageCount = doc.internal.getNumberOfPages();
   for (let p = 1; p <= pageCount; p++) {
     doc.setPage(p);
-    doc.setDrawColor(...BG_TINT);
-    doc.line(marginX, 280, pageWidth - marginX, 280);
+    doc.setDrawColor(...HAIRLINE);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, 275, pageWidth - marginX, 275);
+
+    doc.setFont("times", "italic");
+    doc.setFontSize(9);
+    doc.setTextColor(...MUTED);
+    doc.text("Thank you for your business.", marginX, 282);
+
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.setTextColor(...TEXT_MUTED);
-    doc.setFont(undefined, "normal");
-    doc.text("Thank you for your business.", marginX, 287);
-    doc.text(`Page ${p} of ${pageCount}`, pageWidth - marginX, 287, { align: "right" });
+    doc.text(`Page ${p} of ${pageCount}`, pageWidth - marginX, 282, { align: "right" });
   }
 
   return doc;
