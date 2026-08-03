@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
 import { PLANS, PLAN_DETAILS, getModuleLimit, capModulesToPlan } from "../lib/plans";
@@ -9,12 +10,64 @@ import "./Billing.css";
 // <SUPABASE_URL>/functions/v1/<function-name>.
 const FUNCTIONS_URL = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1`;
 
+// After a PayFast redirect back to this page, the browser round-trip and
+// PayFast's separate, asynchronous ITN webhook race each other — the
+// redirect often lands here before payfast-notify has actually processed
+// the payment and updated the business's plan. So on `?payment=success`
+// we poll for a short window until the plan changes, rather than trusting
+// whatever `business` prop we were mounted with.
+const POLL_INTERVAL_MS = 2000;
+const POLL_MAX_ATTEMPTS = 10; // ~20 seconds total
+
 function Billing({ business, appUser, onBusinessUpdate }) {
   const [switchingTo, setSwitchingTo] = useState(null);
   const [error, setError] = useState("");
+  const [polling, setPolling] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pollAttempts = useRef(0);
 
   const currentPlan = business?.plan || "free";
   const installed = business?.installed_modules || [];
+
+  useEffect(() => {
+    if (searchParams.get("payment") !== "success" || !business?.id) return;
+
+    setPolling(true);
+    pollAttempts.current = 0;
+
+    const interval = setInterval(async () => {
+      pollAttempts.current += 1;
+
+      const { data, error: pollError } = await supabase
+        .from("businesses")
+        .select("*")
+        .eq("id", business.id)
+        .single();
+
+      if (!pollError && data && data.plan !== currentPlan) {
+        // Plan changed — the ITN has landed. Update state and stop polling.
+        if (onBusinessUpdate) onBusinessUpdate(data);
+        setPolling(false);
+        clearInterval(interval);
+        // Clean the query param so refreshing doesn't re-trigger polling.
+        setSearchParams({}, { replace: true });
+        return;
+      }
+
+      if (pollAttempts.current >= POLL_MAX_ATTEMPTS) {
+        // Gave up — the payment may still be processing on PayFast's side,
+        // or something went wrong. Stop polling either way so we don't
+        // hammer the database forever; the "failed" banner or a manual
+        // refresh will cover the rest.
+        setPolling(false);
+        clearInterval(interval);
+        setSearchParams({}, { replace: true });
+      }
+    }, POLL_INTERVAL_MS);
+
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, business?.id]);
 
   const handleSwitchPlan = async (planKey) => {
     if (planKey === currentPlan) return;
@@ -121,6 +174,12 @@ function Billing({ business, appUser, onBusinessUpdate }) {
           {installed.length === 1 ? "" : "s"} installed.
         </p>
 
+        {polling && (
+          <p className="bill-sub" style={{ color: "#14b8a6" }}>
+            Confirming your payment with PayFast — this can take a few seconds...
+          </p>
+        )}
+
         {business?.subscription_status === "failed" && (
           <p className="bill-error">
             Your last payment didn't go through. Please switch your plan again to retry.
@@ -169,7 +228,5 @@ function Billing({ business, appUser, onBusinessUpdate }) {
     </div>
   );
 }
-
-//need to redeploy
 
 export default Billing;
