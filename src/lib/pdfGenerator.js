@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 
-const BRAND_BLUE = [24, 95, 165];
+const BRAND_BLUE = [59, 130, 246];
 const BRAND_BLUE_LIGHT = [55, 138, 221];
 const BG_TINT = [232, 238, 245];
 const TEXT_MUTED = [120, 130, 140];
