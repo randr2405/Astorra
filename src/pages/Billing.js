@@ -16,13 +16,14 @@ const FUNCTIONS_URL = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1`;
 // the payment and updated the business's plan. So on `?payment=success`
 // we poll for a short window until the plan changes, rather than trusting
 // whatever `business` prop we were mounted with.
-const POLL_INTERVAL_MS = 2000;
-const POLL_MAX_ATTEMPTS = 10; // ~20 seconds total
+const POLL_INTERVAL_MS = 3000;
+const POLL_MAX_ATTEMPTS = 30; // ~90 seconds total — PayFast sandbox ITN delivery can be slow
 
 function Billing({ business, appUser, onBusinessUpdate }) {
   const [switchingTo, setSwitchingTo] = useState(null);
   const [error, setError] = useState("");
   const [polling, setPolling] = useState(false);
+  const [pollTimedOut, setPollTimedOut] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const pollAttempts = useRef(0);
 
@@ -33,6 +34,7 @@ function Billing({ business, appUser, onBusinessUpdate }) {
     if (searchParams.get("payment") !== "success" || !business?.id) return;
 
     setPolling(true);
+    setPollTimedOut(false);
     pollAttempts.current = 0;
 
     const interval = setInterval(async () => {
@@ -55,11 +57,11 @@ function Billing({ business, appUser, onBusinessUpdate }) {
       }
 
       if (pollAttempts.current >= POLL_MAX_ATTEMPTS) {
-        // Gave up — the payment may still be processing on PayFast's side,
-        // or something went wrong. Stop polling either way so we don't
-        // hammer the database forever; the "failed" banner or a manual
-        // refresh will cover the rest.
+        // Gave up — the payment may still be processing on PayFast's side.
+        // Stop polling so we don't hammer the database forever, but let
+        // the person know explicitly rather than going silent.
         setPolling(false);
+        setPollTimedOut(true);
         clearInterval(interval);
         setSearchParams({}, { replace: true });
       }
@@ -68,6 +70,19 @@ function Billing({ business, appUser, onBusinessUpdate }) {
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, business?.id]);
+
+  const handleManualRefresh = async () => {
+    const { data, error: refreshError } = await supabase
+      .from("businesses")
+      .select("*")
+      .eq("id", business.id)
+      .single();
+
+    if (!refreshError && data) {
+      if (onBusinessUpdate) onBusinessUpdate(data);
+      setPollTimedOut(false);
+    }
+  };
 
   const handleSwitchPlan = async (planKey) => {
     if (planKey === currentPlan) return;
@@ -176,7 +191,27 @@ function Billing({ business, appUser, onBusinessUpdate }) {
 
         {polling && (
           <p className="bill-sub" style={{ color: "#14b8a6" }}>
-            Confirming your payment with PayFast — this can take a few seconds...
+            Confirming your payment with PayFast — this can take a minute or so...
+          </p>
+        )}
+
+        {pollTimedOut && (
+          <p className="bill-sub" style={{ color: "#f59e0b" }}>
+            Still waiting to hear back from PayFast about your payment.{" "}
+            <button
+              onClick={handleManualRefresh}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#3b82f6",
+                textDecoration: "underline",
+                cursor: "pointer",
+                padding: 0,
+                font: "inherit",
+              }}
+            >
+              Check again
+            </button>
           </p>
         )}
 
