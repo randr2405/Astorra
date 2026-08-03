@@ -84,6 +84,8 @@ Deno.serve(async (req) => {
   });
 
   if (status === "COMPLETE") {
+    console.log("PayFast ITN: looking up business with id:", JSON.stringify(businessId));
+
     const { data: business, error: selectError } = await supabase
       .from("businesses")
       .select("installed_modules")
@@ -92,13 +94,15 @@ Deno.serve(async (req) => {
 
     if (selectError) {
       console.error("PayFast ITN: businesses select failed for", businessId, selectError);
+    } else {
+      console.log("PayFast ITN: businesses select succeeded, found row:", JSON.stringify(business));
     }
 
     const limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
     const installed = business?.installed_modules || [];
     const cappedModules = limit === Infinity ? installed : installed.slice(0, limit);
 
-    const { error: updateError } = await supabase
+    const { data: updatedRows, error: updateError } = await supabase
       .from("businesses")
       .update({
         plan,
@@ -106,12 +110,19 @@ Deno.serve(async (req) => {
         payfast_token: token,
         subscription_status: "active",
       })
-      .eq("id", businessId);
+      .eq("id", businessId)
+      .select();
 
     if (updateError) {
       console.error("PayFast ITN: businesses update failed for", businessId, updateError);
+    } else if (!updatedRows || updatedRows.length === 0) {
+      console.error(
+        "PayFast ITN: update matched ZERO rows for businessId:",
+        businessId,
+        "— this id does not exist in businesses, or RLS/service-role is silently blocking the write"
+      );
     } else {
-      console.log("PayFast ITN: businesses updated successfully for", businessId, "new plan:", plan);
+      console.log("PayFast ITN: businesses updated successfully for", businessId, "new plan:", plan, "rows affected:", updatedRows.length);
     }
 
     await supabase.from("notifications").insert({
