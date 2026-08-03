@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./Landing.css";
 
 function useScrollReveal() {
@@ -19,6 +19,102 @@ function useScrollReveal() {
     els.forEach((el) => observer.observe(el));
     return () => observer.disconnect();
   }, []);
+}
+
+function useHeroParallax() {
+  const heroRef = useRef(null);
+
+  useEffect(() => {
+    const hero = heroRef.current;
+    if (!hero) return;
+
+    const handleMove = (e) => {
+      const rect = hero.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = (e.clientY - rect.top) / rect.height;
+      hero.style.setProperty("--mx", x.toFixed(3));
+      hero.style.setProperty("--my", y.toFixed(3));
+    };
+
+    hero.addEventListener("mousemove", handleMove);
+    return () => hero.removeEventListener("mousemove", handleMove);
+  }, []);
+
+  return heroRef;
+}
+
+function useTilt() {
+  const handleMove = (e) => {
+    const card = e.currentTarget;
+    const rect = card.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    card.style.setProperty("--rx", (-y * 8).toFixed(2));
+    card.style.setProperty("--ry", (x * 8).toFixed(2));
+    card.style.setProperty("--gx", `${(x + 0.5) * 100}%`);
+    card.style.setProperty("--gy", `${(y + 0.5) * 100}%`);
+  };
+
+  const handleLeave = (e) => {
+    const card = e.currentTarget;
+    card.style.setProperty("--rx", 0);
+    card.style.setProperty("--ry", 0);
+  };
+
+  return { onMouseMove: handleMove, onMouseLeave: handleLeave };
+}
+
+function Counter({ value, label }) {
+  const ref = useRef(null);
+  const [display, setDisplay] = useState(value.startsWith("<") || isNaN(parseInt(value)) ? value : "0");
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const numeric = parseInt(value.replace(/[^0-9]/g, ""), 10);
+    const prefix = value.match(/^[^0-9]*/)[0];
+    const suffix = value.match(/[^0-9]*$/)[0];
+
+    if (isNaN(numeric)) {
+      setDisplay(value);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            let start = 0;
+            const duration = 1200;
+            const startTime = performance.now();
+
+            const tick = (now) => {
+              const progress = Math.min((now - startTime) / duration, 1);
+              const eased = 1 - Math.pow(1 - progress, 3);
+              start = Math.round(eased * numeric);
+              setDisplay(`${prefix}${start}${suffix}`);
+              if (progress < 1) requestAnimationFrame(tick);
+            };
+
+            requestAnimationFrame(tick);
+            observer.unobserve(el);
+          }
+        });
+      },
+      { threshold: 0.4 }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [value]);
+
+  return (
+    <div className="stat reveal" ref={ref}>
+      <span className="stat-value">{display}</span>
+      <span className="stat-label">{label}</span>
+    </div>
+  );
 }
 
 const modules = [
@@ -67,27 +163,11 @@ const stats = [
   { value: "24/7", label: "your business, always in view" },
 ];
 
-const testimonials = [
-  {
-    quote: "We went from three spreadsheets and a WhatsApp group to one screen. Quotes go out the same day now.",
-    name: "Operations Lead",
-    context: "Print & signage business",
-  },
-  {
-    quote: "The AI Builder installed a bookings module just from me describing the problem. Took minutes, not a developer.",
-    name: "Owner",
-    context: "Service-based business",
-  },
-  {
-    quote: "Stock finally matches reality. No more manually reconciling what we think we have versus what's actually there.",
-    name: "Founder",
-    context: "Retail & distribution",
-  },
-];
-
 function Landing() {
   const navigate = useNavigate();
   useScrollReveal();
+  const heroRef = useHeroParallax();
+  const tilt = useTilt();
 
   return (
     <div className="landing">
@@ -105,7 +185,8 @@ function Landing() {
         </div>
       </nav>
 
-      <header className="hero">
+      <header className="hero" ref={heroRef}>
+        <div className="hero-spotlight" aria-hidden="true"></div>
         <div className="hero-glow hero-glow-1" aria-hidden="true"></div>
         <div className="hero-glow hero-glow-2" aria-hidden="true"></div>
         <div className="hero-threads" aria-hidden="true">
@@ -128,7 +209,7 @@ function Landing() {
             into a single workspace that adapts to how you already operate.
           </p>
           <div className="hero-actions actions-reveal">
-            <button className="cta-btn cta-btn--large" onClick={() => navigate("/auth")}>
+            <button className="cta-btn cta-btn--large cta-magnetic" onClick={() => navigate("/auth")}>
               Get started free
             </button>
             <span className="hero-note">Free tier available. No card required. Live in under 10 minutes.</span>
@@ -138,11 +219,8 @@ function Landing() {
 
       <section className="stats-strip">
         <div className="section-inner stats-inner">
-          {stats.map((s, i) => (
-            <div className="stat reveal" style={{ transitionDelay: `${i * 80}ms` }} key={s.label}>
-              <span className="stat-value">{s.value}</span>
-              <span className="stat-label">{s.label}</span>
-            </div>
+          {stats.map((s) => (
+            <Counter key={s.label} value={s.value} label={s.label} />
           ))}
         </div>
       </section>
@@ -197,7 +275,13 @@ function Landing() {
           <h2 className="center reveal">Install what you need. Skip what you don't.</h2>
           <div className="module-grid">
             {modules.map((m, i) => (
-              <div className="module-card reveal" style={{ transitionDelay: `${i * 70}ms` }} key={m.name}>
+              <div
+                className="module-card reveal tilt-card"
+                style={{ transitionDelay: `${i * 70}ms` }}
+                key={m.name}
+                {...tilt}
+              >
+                <div className="tilt-glow"></div>
                 <h3>{m.name}</h3>
                 <p>{m.desc}</p>
               </div>
@@ -210,25 +294,6 @@ function Landing() {
         </div>
       </section>
 
-      <section className="section testimonials">
-        <div className="section-inner">
-          <p className="eyebrow eyebrow-center reveal">Why businesses switch</p>
-          <h2 className="center reveal">Built for the way you already work.</h2>
-          <div className="testimonial-grid">
-            {testimonials.map((t, i) => (
-              <div className="testimonial-card reveal" style={{ transitionDelay: `${i * 90}ms` }} key={t.name}>
-                <span className="quote-mark">&ldquo;</span>
-                <p className="testimonial-quote">{t.quote}</p>
-                <div className="testimonial-meta">
-                  <span className="testimonial-name">{t.name}</span>
-                  <span className="testimonial-context">{t.context}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       <section className="section pricing">
         <div className="section-inner">
           <p className="eyebrow eyebrow-center reveal">Pricing</p>
@@ -236,10 +301,12 @@ function Landing() {
           <div className="pricing-grid">
             {tiers.map((t, i) => (
               <div
-                className={`pricing-card reveal ${t.highlight ? "pricing-card--highlight" : ""}`}
+                className={`pricing-card reveal tilt-card ${t.highlight ? "pricing-card--highlight" : ""}`}
                 style={{ transitionDelay: `${i * 70}ms` }}
                 key={t.name}
+                {...tilt}
               >
+                <div className="tilt-glow"></div>
                 {t.highlight && <span className="pricing-badge">Most popular</span>}
                 <h3>{t.name}</h3>
                 <div className="pricing-amount">
@@ -269,7 +336,7 @@ function Landing() {
             Answer a few questions and see the workspace Astorra builds for
             your business — free, and ready before your coffee's cold.
           </p>
-          <button className="cta-btn cta-btn--large" onClick={() => navigate("/auth")}>
+          <button className="cta-btn cta-btn--large cta-magnetic" onClick={() => navigate("/auth")}>
             Get started free
           </button>
           <span className="hero-note">No card required. Cancel anytime.</span>
