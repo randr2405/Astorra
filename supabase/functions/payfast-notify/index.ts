@@ -7,11 +7,6 @@
 // or spoofed.
 //
 // Must respond fast with a 200, and PayFast expects no particular body.
-//
-// TEMPORARY DEBUG LOGGING — remove once the signature mismatch is fixed.
-// Logs the raw body, parsed entries, and passphrase length/char codes so
-// we can hand-verify the exact string being hashed. Never logs the
-// passphrase itself, only its length and character codes.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyItnSignature, confirmWithPayFast } from "../_shared/payfast.ts";
@@ -36,22 +31,10 @@ Deno.serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
-  // TEMPORARY DEBUG — passphrase length/char codes only, never the value.
-  console.log(
-    "PASSPHRASE DEBUG — length:",
-    PASSPHRASE.length,
-    "codes:",
-    [...PASSPHRASE].map((c) => c.charCodeAt(0)).join(",")
-  );
-
   const rawBody = await req.text();
   const params = new URLSearchParams(rawBody);
   const bodyEntries: [string, string][] = Array.from(params.entries());
   const data = Object.fromEntries(bodyEntries);
-
-  // TEMPORARY DEBUG — remove once signature mismatch is resolved.
-  console.log("PayFast ITN debug — raw body:", rawBody);
-  console.log("PayFast ITN debug — parsed entries:", JSON.stringify(bodyEntries));
 
   // 1. Signature check
   if (!verifyItnSignature(bodyEntries, PASSPHRASE)) {
@@ -101,17 +84,21 @@ Deno.serve(async (req) => {
   });
 
   if (status === "COMPLETE") {
-    const { data: business } = await supabase
+    const { data: business, error: selectError } = await supabase
       .from("businesses")
       .select("installed_modules")
       .eq("id", businessId)
       .single();
 
+    if (selectError) {
+      console.error("PayFast ITN: businesses select failed for", businessId, selectError);
+    }
+
     const limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
     const installed = business?.installed_modules || [];
     const cappedModules = limit === Infinity ? installed : installed.slice(0, limit);
 
-    await supabase
+    const { error: updateError } = await supabase
       .from("businesses")
       .update({
         plan,
@@ -120,6 +107,12 @@ Deno.serve(async (req) => {
         subscription_status: "active",
       })
       .eq("id", businessId);
+
+    if (updateError) {
+      console.error("PayFast ITN: businesses update failed for", businessId, updateError);
+    } else {
+      console.log("PayFast ITN: businesses updated successfully for", businessId, "new plan:", plan);
+    }
 
     await supabase.from("notifications").insert({
       business_id: businessId,
