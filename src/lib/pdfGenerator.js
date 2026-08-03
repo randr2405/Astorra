@@ -187,6 +187,58 @@ function buildDocPdf({ type, number, business, customer, items, total, status })
   doc.setTextColor(...ACCENT);
   doc.text(`R ${Number(total).toFixed(2)}`, pageWidth - marginX, y + 1, { align: "right" });
 
+  // ---- Payment details ----
+  // Only rendered for invoices (quotes have nothing to pay yet) and only
+  // when the business has actually filled in banking details via Settings.
+  const hasBankingDetails = type === "invoice" && business?.bank_name && business?.bank_account_number;
+
+  if (hasBankingDetails) {
+    if (y > 240) {
+      doc.addPage();
+      y = 24;
+    }
+
+    y += 14;
+    doc.setDrawColor(...HAIRLINE);
+    doc.setLineWidth(0.3);
+    doc.line(marginX, y, pageWidth - marginX, y);
+    y += 9;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...INK);
+    doc.text("PAYMENT DETAILS", marginX, y);
+    y += 7;
+
+    const bankRows = [
+      ["Bank", business.bank_name],
+      ["Account holder", business.bank_account_holder],
+      ["Account number", business.bank_account_number],
+      ["Branch code", business.bank_branch_code],
+      ["Account type", business.bank_account_type],
+    ].filter(([, value]) => value);
+
+    doc.setFontSize(9.5);
+    bankRows.forEach(([label, value]) => {
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...MUTED);
+      doc.text(label, marginX, y);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...INK);
+      doc.text(String(value), marginX + 45, y);
+      y += 6;
+    });
+
+    y += 2;
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8.5);
+    doc.setTextColor(...MUTED);
+    const refNote = business.bank_payment_reference_note || `Please use "${number}" as your payment reference.`;
+    const refLines = doc.splitTextToSize(refNote, pageWidth - marginX * 2);
+    doc.text(refLines, marginX, y);
+    y += refLines.length * 5;
+  }
+
   // ---- Footer ----
   const pageCount = doc.internal.getNumberOfPages();
   for (let p = 1; p <= pageCount; p++) {
