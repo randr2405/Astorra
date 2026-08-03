@@ -6,6 +6,7 @@ import { supabase } from "./lib/supabaseClient";
 import { hasAiAccess } from "./lib/plans";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
+import PayInvoice from "./pages/PayInvoice";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
@@ -67,6 +68,11 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Landing />} />
+
+        {/* Public, unauthenticated route — the person paying an invoice is
+            the business's customer, not an Astorra account holder. No
+            Firebase/Supabase auth check here, same tier as Landing/Auth. */}
+        <Route path="/pay/:token" element={<PayInvoice />} />
 
         <Route
           path="/auth"

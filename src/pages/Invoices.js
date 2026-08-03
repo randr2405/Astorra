@@ -303,6 +303,7 @@ function Invoices({ business, appUser }) {
         toName: fullCustomer.name,
         pdfBase64,
         businessName: business.name,
+        publicToken: invoice.public_token,
       });
 
       notify(business.id, appUser?.id, `Invoice ${invoice.invoice_number} was emailed to ${fullCustomer.name}.`);
