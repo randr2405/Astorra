@@ -78,6 +78,12 @@ Deno.serve(async (req) => {
 
   const signature = generateSignature(orderedEntries, PASSPHRASE);
 
+  // TEMPORARY DEBUG LOGGING — remove once the signature mismatch is fixed.
+  // Never log the passphrase itself; log everything else so we can
+  // manually verify the exact string being hashed.
+  console.log("PayFast signature debug — ordered entries:", JSON.stringify(orderedEntries));
+  console.log("PayFast signature debug — computed signature:", signature);
+
   // Supabase's edge runtime forces `Content-Type: text/plain` and a
   // sandboxed CSP on every response, regardless of what we set here — so
   // we can't serve an HTML auto-submit page directly from this domain.
