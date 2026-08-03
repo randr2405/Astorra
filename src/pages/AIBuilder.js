@@ -11,8 +11,9 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [result, setResult] = useState(null); // { modules: [...], reasoning }
+  const [result, setResult] = useState(null); // { mode, modules, reasoning, answer }
   const [installing, setInstalling] = useState(false);
+  const [credits, setCredits] = useState(null); // { used, limit, resetAt }
 
   const installed = business?.installed_modules || [];
   const plan = business?.plan || "free";
@@ -23,7 +24,8 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
   // access at all (this page shouldn't even be reachable for Free, see
   // the route guard in App.js, but we double-check here too). Starter is
   // capped very low, Professional gets a business-level cap, Enterprise
-  // is unlimited.
+  // is unlimited. monthlyCredits (shown once we hear back from the
+  // server) caps how many AI Builder requests can be made per month.
   const aiAccess = getAiAccess(plan);
   const recCap = aiAccess.maxRecommendations;
   const noAiAccess = aiAccess.level === "none";
@@ -42,8 +44,17 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
 
     setLoading(false);
 
+    // The edge function returns a 402-style error payload (still delivered
+    // as `data`, since supabase-js doesn't throw on non-2xx by default for
+    // functions.invoke — it surfaces the body either way) when out of
+    // monthly credits. Surface credits info either way if present so the
+    // "X of Y requests left" display stays accurate.
+    if (data?.credits_used !== undefined) {
+      setCredits({ used: data.credits_used, limit: data.credits_limit, resetAt: data.credits_reset_at });
+    }
+
     if (fnError || data?.error) {
-      setError(data?.error || fnError.message || "Something went wrong. Please try again.");
+      setError(data?.error || fnError?.message || "Something went wrong. Please try again.");
       return;
     }
 
@@ -113,7 +124,7 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
           <p className="aib-eyebrow">AI Builder</p>
           <h1 className="aib-heading">AI Builder isn't included on your plan</h1>
           <p className="aib-sub">
-            Upgrade to Starter or above to get AI-powered module recommendations.
+            Upgrade to Starter or above to get AI-powered module recommendations and business insights.
           </p>
           <button className="aib-install-btn" onClick={() => navigate("/dashboard/billing")}>
             View plans
@@ -123,39 +134,69 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
     );
   }
 
+  const creditsLimit = credits?.limit;
+  const creditsUsed = credits?.used;
+  const outOfCredits =
+    creditsLimit !== undefined && creditsLimit !== Infinity && creditsUsed !== undefined && creditsUsed >= creditsLimit;
+
   return (
     <div className="aib-page">
       <AppNav business={business} />
 
       <div className="aib-body">
         <p className="aib-eyebrow">AI Builder</p>
-        <h1 className="aib-heading">Describe your problem. We'll set it up.</h1>
+        <h1 className="aib-heading">Describe your problem, or ask about your business.</h1>
         <p className="aib-sub">
-          Tell us what your business does, in your own words — no need to know which modules
-          exist.
+          Tell us what your business does and we'll recommend modules — or ask a question about
+          your business (like "how many customers do we have") and we'll answer using your actual
+          data.
         </p>
         <p className="aib-sub" style={{ fontSize: "12.5px", opacity: 0.75 }}>
           Your {PLAN_NAME_FALLBACK(plan)} plan can install up to{" "}
           {recCap === Infinity ? "unlimited modules" : `${recCap} module${recCap === 1 ? "" : "s"}`} per
           AI Builder request.
+          {credits && creditsLimit !== undefined && (
+            <>
+              {" "}
+              {creditsLimit === Infinity
+                ? "Unlimited AI Builder requests this month."
+                : `${Math.max(creditsLimit - creditsUsed, 0)} of ${creditsLimit} AI Builder requests left this month.`}
+            </>
+          )}
         </p>
 
         <form className="aib-form" onSubmit={handleSubmit}>
           <textarea
             className="aib-textarea"
             rows={4}
-            placeholder="e.g. We hire out equipment and need to track who has what"
+            placeholder="e.g. We hire out equipment and need to track who has what — or ask: how many quotes did we send this month?"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
           />
-          <button type="submit" className="aib-submit" disabled={loading || !description.trim()}>
-            {loading ? "Thinking..." : "Get recommendations"}
+          <button type="submit" className="aib-submit" disabled={loading || !description.trim() || outOfCredits}>
+            {loading ? "Thinking..." : "Ask AI Builder"}
           </button>
         </form>
 
+        {outOfCredits && (
+          <p className="aib-cap-notice">
+            You've used all your AI Builder requests for this month.{" "}
+            <button className="aib-inline-link" onClick={() => navigate("/dashboard/billing")}>
+              Upgrade
+            </button>{" "}
+            for more, or wait until your credits reset.
+          </p>
+        )}
+
         {error && <p className="aib-error">{error}</p>}
 
-        {result && (
+        {result?.mode === "analysis" && (
+          <div className="aib-result">
+            <p className="aib-reasoning">{result.answer}</p>
+          </div>
+        )}
+
+        {result?.mode === "modules" && (
           <div className="aib-result">
             {result.modules.length === 0 ? (
               <p className="aib-reasoning">{result.reasoning}</p>

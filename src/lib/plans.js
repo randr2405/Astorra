@@ -17,14 +17,18 @@ export const PLAN_DETAILS = {
   enterprise: { name: "Enterprise", price: "R1,499", cadence: "/pm", ai: "Full AI included", extraModulePrice: "R79 / module / pm (premium AI only)" },
 };
 
-// AI Builder access per plan. "maxRecommendations" caps how many modules
-// the AI Builder will let a business install per request — separate from
-// PLAN_LIMITS, which caps the total number of installed modules overall.
+// AI Builder access per plan.
+// - maxRecommendations caps how many modules can be installed in a single
+//   AI Builder request (separate from PLAN_LIMITS, the total module cap).
+// - monthlyCredits caps how many AI Builder *requests* (calls to Claude)
+//   a business gets per calendar month, enforced server-side in the
+//   ai-builder edge function (see supabase/functions/ai-builder/index.ts —
+//   this map is mirrored there since edge functions can't import from src/).
 export const AI_ACCESS = {
-  free: { level: "none", maxRecommendations: 0 },
-  starter: { level: "limited", maxRecommendations: 2 },
-  professional: { level: "business", maxRecommendations: 5 },
-  enterprise: { level: "unlimited", maxRecommendations: Infinity },
+  free: { level: "none", maxRecommendations: 0, monthlyCredits: 0 },
+  starter: { level: "limited", maxRecommendations: 2, monthlyCredits: 5 },
+  professional: { level: "business", maxRecommendations: 5, monthlyCredits: 30 },
+  enterprise: { level: "unlimited", maxRecommendations: Infinity, monthlyCredits: Infinity },
 };
 
 // Core installable modules (MVP scope). Category groupings mirror the

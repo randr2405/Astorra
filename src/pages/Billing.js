@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
-import { PLANS, PLAN_DETAILS, getModuleLimit, capModulesToPlan } from "../lib/plans";
+import { PLANS, PLAN_DETAILS, getModuleLimit, capModulesToPlan, getAiAccess } from "../lib/plans";
 import AppNav from "../components/AppNav";
 import "./Billing.css";
 
@@ -29,6 +29,21 @@ function Billing({ business, appUser, onBusinessUpdate }) {
 
   const currentPlan = business?.plan || "free";
   const installed = business?.installed_modules || [];
+
+  // AI credit usage. The monthly rollover is only actually applied inside
+  // the ai-builder edge function when a request is made — so if a
+  // business hasn't called AI Builder yet this month, ai_credits_used in
+  // the database may still reflect last month's count. We account for
+  // that here client-side so the number shown is never misleadingly
+  // stale, even before their next AI Builder request triggers the real
+  // reset in the database.
+  const aiAccess = getAiAccess(currentPlan);
+  const creditsLimit = aiAccess.monthlyCredits;
+  const resetAt = business?.ai_credits_reset_at ? new Date(business.ai_credits_reset_at) : null;
+  const isPastReset = resetAt ? new Date() >= resetAt : false;
+  const rawCreditsUsed = business?.ai_credits_used ?? 0;
+  const creditsUsed = isPastReset ? 0 : rawCreditsUsed;
+  const creditsRemaining = creditsLimit === Infinity ? Infinity : Math.max(creditsLimit - creditsUsed, 0);
 
   useEffect(() => {
     if (searchParams.get("payment") !== "success" || !business?.id) return;
@@ -188,6 +203,27 @@ function Billing({ business, appUser, onBusinessUpdate }) {
           <strong>{PLAN_DETAILS[currentPlan].name}</strong> plan with {installed.length} module
           {installed.length === 1 ? "" : "s"} installed.
         </p>
+
+        {creditsLimit > 0 && (
+          <p className="bill-sub" style={{ fontSize: "13px" }}>
+            {creditsLimit === Infinity ? (
+              "Unlimited AI Builder requests this month."
+            ) : (
+              <>
+                <strong>{creditsRemaining}</strong> of {creditsLimit} AI Builder request
+                {creditsLimit === 1 ? "" : "s"} left this month
+                {resetAt && !isPastReset && (
+                  <>
+                    {" "}
+                    — resets{" "}
+                    {resetAt.toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                  </>
+                )}
+                .
+              </>
+            )}
+          </p>
+        )}
 
         {polling && (
           <p className="bill-sub" style={{ color: "#14b8a6" }}>
