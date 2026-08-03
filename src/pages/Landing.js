@@ -60,6 +60,31 @@ const tiers = [
   { name: "Enterprise", price: "R1,499", cadence: "/pm", modules: "Unlimited modules", ai: "Full AI included", highlight: false },
 ];
 
+const stats = [
+  { value: "5", label: "core modules ready on day one" },
+  { value: "<10", label: "minutes from sign-up to working workspace" },
+  { value: "1", label: "dashboard instead of five logins" },
+  { value: "24/7", label: "your business, always in view" },
+];
+
+const testimonials = [
+  {
+    quote: "We went from three spreadsheets and a WhatsApp group to one screen. Quotes go out the same day now.",
+    name: "Operations Lead",
+    context: "Print & signage business",
+  },
+  {
+    quote: "The AI Builder installed a bookings module just from me describing the problem. Took minutes, not a developer.",
+    name: "Owner",
+    context: "Service-based business",
+  },
+  {
+    quote: "Stock finally matches reality. No more manually reconciling what we think we have versus what's actually there.",
+    name: "Founder",
+    context: "Retail & distribution",
+  },
+];
+
 function Landing() {
   const navigate = useNavigate();
   useScrollReveal();
@@ -81,6 +106,8 @@ function Landing() {
       </nav>
 
       <header className="hero">
+        <div className="hero-glow hero-glow-1" aria-hidden="true"></div>
+        <div className="hero-glow hero-glow-2" aria-hidden="true"></div>
         <div className="hero-threads" aria-hidden="true">
           <svg viewBox="0 0 1200 400" preserveAspectRatio="none">
             <path className="thread thread-1" d="M0,320 C250,280 350,120 620,150 C850,175 950,60 1200,90" />
@@ -101,13 +128,24 @@ function Landing() {
             into a single workspace that adapts to how you already operate.
           </p>
           <div className="hero-actions actions-reveal">
-            <button className="cta-btn" onClick={() => navigate("/auth")}>
+            <button className="cta-btn cta-btn--large" onClick={() => navigate("/auth")}>
               Get started free
             </button>
-            <span className="hero-note">Free tier available. No card required.</span>
+            <span className="hero-note">Free tier available. No card required. Live in under 10 minutes.</span>
           </div>
         </div>
       </header>
+
+      <section className="stats-strip">
+        <div className="section-inner stats-inner">
+          {stats.map((s, i) => (
+            <div className="stat reveal" style={{ transitionDelay: `${i * 80}ms` }} key={s.label}>
+              <span className="stat-value">{s.value}</span>
+              <span className="stat-label">{s.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
 
       <section className="section problem">
         <div className="section-inner problem-grid reveal">
@@ -172,6 +210,25 @@ function Landing() {
         </div>
       </section>
 
+      <section className="section testimonials">
+        <div className="section-inner">
+          <p className="eyebrow eyebrow-center reveal">Why businesses switch</p>
+          <h2 className="center reveal">Built for the way you already work.</h2>
+          <div className="testimonial-grid">
+            {testimonials.map((t, i) => (
+              <div className="testimonial-card reveal" style={{ transitionDelay: `${i * 90}ms` }} key={t.name}>
+                <span className="quote-mark">&ldquo;</span>
+                <p className="testimonial-quote">{t.quote}</p>
+                <div className="testimonial-meta">
+                  <span className="testimonial-name">{t.name}</span>
+                  <span className="testimonial-context">{t.context}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="section pricing">
         <div className="section-inner">
           <p className="eyebrow eyebrow-center reveal">Pricing</p>
@@ -204,15 +261,18 @@ function Landing() {
       </section>
 
       <section className="section closing">
+        <div className="closing-glow" aria-hidden="true"></div>
         <div className="section-inner closing-inner reveal">
+          <p className="eyebrow eyebrow-center">Ready when you are</p>
           <h2>One platform. Your way.</h2>
           <p className="hero-sub">
             Answer a few questions and see the workspace Astorra builds for
-            your business.
+            your business — free, and ready before your coffee's cold.
           </p>
-          <button className="cta-btn" onClick={() => navigate("/auth")}>
+          <button className="cta-btn cta-btn--large" onClick={() => navigate("/auth")}>
             Get started free
           </button>
+          <span className="hero-note">No card required. Cancel anytime.</span>
         </div>
       </section>
 
