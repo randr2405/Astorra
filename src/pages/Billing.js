@@ -5,6 +5,10 @@ import { PLANS, PLAN_DETAILS, getModuleLimit, capModulesToPlan } from "../lib/pl
 import AppNav from "../components/AppNav";
 import "./Billing.css";
 
+// Must match REACT_APP_SUPABASE_URL's project ref — Edge Functions live at
+// <SUPABASE_URL>/functions/v1/<function-name>.
+const FUNCTIONS_URL = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1`;
+
 function Billing({ business, appUser, onBusinessUpdate }) {
   const [switchingTo, setSwitchingTo] = useState(null);
   const [error, setError] = useState("");
@@ -29,29 +33,45 @@ function Billing({ business, appUser, onBusinessUpdate }) {
       if (!proceed) return;
     }
 
-    setSwitchingTo(planKey);
+    // Free is the only plan with no PayFast step — switch straight away,
+    // and cancel any existing recurring subscription so billing stops.
+    if (planKey === "free") {
+      setSwitchingTo(planKey);
 
-    // NOTE: this updates the plan directly. Once PayFast is wired in, this
-    // should instead kick off a subscription/checkout flow and only update
-    // `plan` after PayFast confirms the payment via webhook.
-    const nextModules = isDowngrade ? capModulesToPlan(installed, planKey) : installed;
+      if (business.payfast_token) {
+        const { error: cancelError } = await supabase.functions.invoke("payfast-cancel", {
+          body: { business_id: business.id },
+        });
+        if (cancelError) {
+          setSwitchingTo(null);
+          return setError(`Could not cancel your active subscription: ${cancelError.message}`);
+        }
+      }
 
-    const { data, error: updateError } = await supabase
-      .from("businesses")
-      .update({ plan: planKey, installed_modules: nextModules })
-      .eq("id", business.id)
-      .select()
-      .single();
+      const nextModules = isDowngrade ? capModulesToPlan(installed, planKey) : installed;
+      const { data, error: updateError } = await supabase
+        .from("businesses")
+        .update({ plan: "free", installed_modules: nextModules })
+        .eq("id", business.id)
+        .select()
+        .single();
 
-    setSwitchingTo(null);
+      setSwitchingTo(null);
 
-    if (updateError) {
-      setError(updateError.message);
+      if (updateError) {
+        return setError(updateError.message);
+      }
+
+      if (onBusinessUpdate) onBusinessUpdate(data);
+      notify(business.id, appUser?.id, `Plan changed to ${PLAN_DETAILS.free.name}.`);
       return;
     }
 
-    if (onBusinessUpdate) onBusinessUpdate(data);
-    notify(business.id, appUser?.id, `Plan changed to ${PLAN_DETAILS[planKey].name}.`);
+    // Paid plans go through PayFast. The plan does NOT change here — it
+    // only changes once payfast-notify confirms the payment server-side.
+    // We just send the browser off to PayFast's hosted checkout.
+    setSwitchingTo(planKey);
+    window.location.href = `${FUNCTIONS_URL}/payfast-checkout?business_id=${business.id}&plan=${planKey}`;
   };
 
   return (
@@ -66,6 +86,12 @@ function Billing({ business, appUser, onBusinessUpdate }) {
           <strong>{PLAN_DETAILS[currentPlan].name}</strong> plan with {installed.length} module
           {installed.length === 1 ? "" : "s"} installed.
         </p>
+
+        {business?.subscription_status === "failed" && (
+          <p className="bill-error">
+            Your last payment didn't go through. Please switch your plan again to retry.
+          </p>
+        )}
 
         {error && <p className="bill-error">{error}</p>}
 
@@ -94,7 +120,7 @@ function Billing({ business, appUser, onBusinessUpdate }) {
                   onClick={() => handleSwitchPlan(planKey)}
                   disabled={isCurrent || isBusy}
                 >
-                  {isCurrent ? "Current plan" : isBusy ? "Switching..." : "Switch plan"}
+                  {isCurrent ? "Current plan" : isBusy ? "Redirecting..." : "Switch plan"}
                 </button>
               </div>
             );
