@@ -173,7 +173,9 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
               {" "}
               {creditsLimitDisplay === Infinity
                 ? "Unlimited AI Builder requests this month."
-                : `${Math.max(creditsLimitDisplay - creditsUsedDisplay, 0)} of ${creditsLimitDisplay} AI Builder requests left this month.`}
+                : `${Math.max(creditsLimitDisplay - creditsUsedDisplay, 0)} of ${creditsLimitDisplay} AI Builder requests left this month${
+                    creditsResetDisplay ? ` (resets ${creditsResetDisplay.toLocaleDateString(undefined, { day: "numeric", month: "short" })})` : ""
+                  }.`}
             </>
           )}
         </p>
