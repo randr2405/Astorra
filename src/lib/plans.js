@@ -17,6 +17,16 @@ export const PLAN_DETAILS = {
   enterprise: { name: "Enterprise", price: "R1,499", cadence: "/pm", ai: "Full AI included", extraModulePrice: "R79 / module / pm (premium AI only)" },
 };
 
+// AI Builder access per plan. "maxRecommendations" caps how many modules
+// the AI Builder will let a business install per request — separate from
+// PLAN_LIMITS, which caps the total number of installed modules overall.
+export const AI_ACCESS = {
+  free: { level: "none", maxRecommendations: 0 },
+  starter: { level: "limited", maxRecommendations: 2 },
+  professional: { level: "business", maxRecommendations: 5 },
+  enterprise: { level: "unlimited", maxRecommendations: Infinity },
+};
+
 // Core installable modules (MVP scope). Category groupings mirror the
 // marketplace structure described in the brand doc (Sales, HR, Operations,
 // Finance, AI, Communication) so new modules can slot in later.
@@ -41,4 +51,12 @@ export function capModulesToPlan(modules, plan) {
 
 export function getModule(key) {
   return MODULE_CATALOG.find((m) => m.key === key);
+}
+
+export function getAiAccess(plan) {
+  return AI_ACCESS[plan] ?? AI_ACCESS.free;
+}
+
+export function hasAiAccess(plan) {
+  return getAiAccess(plan).level !== "none";
 }

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./lib/firebase";
 import { supabase } from "./lib/supabaseClient";
+import { hasAiAccess } from "./lib/plans";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import Onboarding from "./pages/Onboarding";
@@ -243,6 +244,8 @@ function App() {
               <Navigate to="/auth" replace />
             ) : !business ? (
               <Navigate to="/onboarding" replace />
+            ) : !hasAiAccess(business.plan) ? (
+              <Navigate to="/dashboard/billing" replace />
             ) : (
               <AIBuilder business={business} appUser={appUser} onBusinessUpdate={handleBusinessUpdate} />
             )
