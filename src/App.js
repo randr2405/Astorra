@@ -4,6 +4,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./lib/firebase";
 import { supabase } from "./lib/supabaseClient";
 import { hasAiAccess } from "./lib/plans";
+import CustomCursor from "./components/CustomCursor";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import PayInvoice from "./pages/PayInvoice";
@@ -68,6 +69,7 @@ function App() {
 
   return (
     <BrowserRouter>
+      <CustomCursor />
       <Routes>
         <Route path="/" element={<Landing />} />
 

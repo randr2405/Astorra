@@ -1,0 +1,66 @@
+body.custom-cursor-active {
+  cursor: none;
+}
+
+body.custom-cursor-active button,
+body.custom-cursor-active a,
+body.custom-cursor-active input,
+body.custom-cursor-active textarea,
+body.custom-cursor-active select {
+  cursor: none;
+}
+
+.custom-cursor-dot,
+.custom-cursor-ring {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 9999;
+  border-radius: 50%;
+  will-change: transform;
+  transition: opacity 0.2s ease;
+}
+
+.custom-cursor-dot {
+  width: 8px;
+  height: 8px;
+  background: #ffffff;
+  box-shadow: 0 0 10px rgba(124, 58, 237, 0.85);
+}
+
+.custom-cursor-ring {
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  background: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.15),
+    rgba(59, 130, 246, 0.15),
+    rgba(20, 184, 166, 0.15)
+  );
+  transition: width 0.25s ease, height 0.25s ease, background 0.25s ease,
+    border-color 0.25s ease, opacity 0.2s ease;
+}
+
+.custom-cursor-ring.is-hovering {
+  width: 64px;
+  height: 64px;
+  border-color: rgba(20, 184, 166, 0.85);
+  background: linear-gradient(
+    135deg,
+    rgba(124, 58, 237, 0.28),
+    rgba(59, 130, 246, 0.28),
+    rgba(20, 184, 166, 0.28)
+  );
+}
+
+.custom-cursor-ring.is-pressing {
+  width: 30px;
+  height: 30px;
+}
+
+.custom-cursor-dot.is-hidden,
+.custom-cursor-ring.is-hidden {
+  opacity: 0;
+}

@@ -9,7 +9,29 @@ import {
 import { auth } from "../lib/firebase";
 import "./Auth.css";
 
-// "signup" | "login" | "reset"
+const friendlyAuthError = (code) => {
+  switch (code) {
+    case "auth/email-already-in-use":
+      return "An account with this email already exists. Try logging in instead.";
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return "Incorrect email or password.";
+    case "auth/weak-password":
+      return "Your password should be at least 6 characters.";
+    case "auth/invalid-email":
+      return "Please enter a valid email address.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Please wait a moment and try again.";
+    case "auth/network-request-failed":
+      return "Network error. Please check your connection and try again.";
+    case "auth/popup-closed-by-user":
+      return "";
+    default:
+      return "Something went wrong. Please try again.";
+  }
+};
+
 function Auth() {
   const [mode, setMode] = useState("signup");
   const [email, setEmail] = useState("");
@@ -39,7 +61,8 @@ function Auth() {
         setResetSent(true);
       }
     } catch (err) {
-      setError(err.message);
+      const message = friendlyAuthError(err.code);
+      if (message) setError(message);
     }
 
     setSubmitting(false);
@@ -51,7 +74,8 @@ function Auth() {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
     } catch (err) {
-      setError(err.message);
+      const message = friendlyAuthError(err.code);
+      if (message) setError(message);
     }
   };
 
@@ -60,7 +84,7 @@ function Auth() {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
+      <div className="auth-card" key={mode}>
         <p className="auth-wordmark">ASTORRA</p>
         <p className="auth-slogan">One platform. Your way.</p>
 
