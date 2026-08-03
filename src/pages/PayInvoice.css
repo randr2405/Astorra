@@ -1,201 +1,43 @@
-.pay-page {
-  min-height: 100vh;
-  background: #0d0d14;
-  color: #e7e9ef;
-  font-family: "Inter", sans-serif;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-}
-
-.pay-body {
-  width: 100%;
-  max-width: 520px;
-  margin: 0 auto;
-  padding: 64px 24px 80px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.pay-wordmark {
-  font-family: "Sora", sans-serif;
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: 0.12em;
-  color: #d7dae2;
-  margin: 0 0 28px;
-}
-
-.pay-muted {
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 14px;
-}
-
-.pay-card {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 16px;
-  padding: 32px;
-}
-
-.pay-eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 11.5px;
-  font-weight: 600;
-  color: #14b8a6;
-  margin: 0 0 10px;
-}
-
-.pay-heading {
-  font-family: "Sora", sans-serif;
-  font-size: 24px;
-  font-weight: 600;
-  color: #fdfdfe;
-  margin: 0 0 8px;
-}
-
-.pay-sub {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
-  margin: 0 0 20px;
-  line-height: 1.6;
-}
-
-.pay-status {
-  font-size: 13.5px;
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin: 0 0 20px;
-}
-
-.pay-status--polling {
-  color: #14b8a6;
-  background: rgba(20, 184, 166, 0.1);
-}
-
-.pay-status--warn {
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.1);
-}
-
-.pay-status--paid {
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.1);
-  font-weight: 600;
-}
-
-.pay-inline-link {
-  background: none;
-  border: none;
-  color: #3b82f6;
-  text-decoration: underline;
-  cursor: pointer;
-  padding: 0;
-  font: inherit;
-}
-
-.pay-line-items {
+.pay-bank-details {
+  margin-top: 24px;
+  padding-top: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 16px 0;
-  margin-bottom: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
 }
 
-.pay-line-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  font-size: 13.5px;
-}
-
-.pay-line-item-desc {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.pay-line-item-desc > span:first-child {
-  color: #d7dae2;
-}
-
-.pay-line-item-total {
-  color: #fdfdfe;
+.pay-bank-details-heading {
+  font-family: "Sora", sans-serif;
+  font-size: 13px;
   font-weight: 600;
-  white-space: nowrap;
-  margin-left: 16px;
+  letter-spacing: 0.04em;
+  color: #d7dae2;
+  margin: 0 0 14px;
 }
 
-.pay-total-row {
+.pay-bank-row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: 4px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.pay-total-amount {
-  font-family: "Sora", sans-serif;
-  font-size: 26px;
-  font-weight: 700;
-  color: #fdfdfe;
-}
-
-.pay-due-date {
-  font-size: 12.5px;
-  color: rgba(255, 255, 255, 0.7);
-  margin: 0 0 24px;
-}
-
-.pay-error {
-  color: #f87171;
   font-size: 13.5px;
-  margin-bottom: 16px;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.pay-btn {
-  width: 100%;
-  padding: 14px 16px;
-  border-radius: 8px;
-  border: none;
-  background: linear-gradient(135deg, #7c3aed, #3b82f6);
-  color: #fff;
-  font-family: "Inter", sans-serif;
+.pay-bank-row:last-of-type {
+  border-bottom: none;
+}
+
+.pay-bank-row > span:last-child {
+  color: #fdfdfe;
   font-weight: 600;
-  font-size: 14px;
-  cursor: pointer;
-  margin-top: 16px;
-  transition: opacity 0.15s ease;
+  text-align: right;
 }
 
-.pay-btn:hover {
-  opacity: 0.9;
-}
-
-.pay-btn:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.pay-footnote {
-  margin-top: 24px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.4);
-  text-align: center;
-}
-
-@media (max-width: 560px) {
-  .pay-body {
-    padding: 40px 16px 60px;
-  }
-
-  .pay-card {
-    padding: 24px;
-  }
+.pay-bank-reference {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.6;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 10px 12px;
 }

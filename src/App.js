@@ -19,6 +19,7 @@ import Documents from "./pages/Documents";
 import Notifications from "./pages/Notifications";
 import Marketplace from "./pages/Marketplace";
 import Billing from "./pages/Billing";
+import Settings from "./pages/Settings";
 import AIBuilder from "./pages/AIBuilder";
 
 function App() {
@@ -55,9 +56,10 @@ function App() {
     if (newAppUser) setAppUser(newAppUser);
   };
 
-  // Passed down to Marketplace/Billing/AIBuilder so a plan switch or module
-  // install/uninstall is reflected immediately across the app (e.g. the
-  // Dashboard's module grid and plan strip) without a full reload.
+  // Passed down to Marketplace/Billing/Settings/AIBuilder so a plan switch,
+  // module install/uninstall, or business detail update is reflected
+  // immediately across the app (e.g. the Dashboard's module grid and plan
+  // strip) without a full reload.
   const handleBusinessUpdate = (updatedBusiness) => {
     setBusiness(updatedBusiness);
   };
@@ -239,6 +241,19 @@ function App() {
               <Navigate to="/onboarding" replace />
             ) : (
               <Billing business={business} appUser={appUser} onBusinessUpdate={handleBusinessUpdate} />
+            )
+          }
+        />
+
+        <Route
+          path="/dashboard/settings"
+          element={
+            !user ? (
+              <Navigate to="/auth" replace />
+            ) : !business ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <Settings business={business} appUser={appUser} onBusinessUpdate={handleBusinessUpdate} />
             )
           }
         />

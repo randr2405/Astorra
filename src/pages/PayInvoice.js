@@ -1,17 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useCallback } from "react";
+import { useParams } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import "./PayInvoice.css";
-
-const FUNCTIONS_URL = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1`;
-
-// Same problem Billing.js has with subscription payments: the browser
-// redirect back here can land before PayFast's separate, asynchronous ITN
-// has actually reached payfast-invoice-notify and flipped the invoice to
-// paid. So on `?payment=success` we poll for a short window until the
-// status changes, rather than trusting the redirect alone.
-const POLL_INTERVAL_MS = 3000;
-const POLL_MAX_ATTEMPTS = 30; // ~90 seconds total
 
 function formatDueDate(dateStr) {
   if (!dateStr) return null;
@@ -21,16 +11,10 @@ function formatDueDate(dateStr) {
 
 function PayInvoice() {
   const { token } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
 
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
-  const [error, setError] = useState("");
-  const [redirecting, setRedirecting] = useState(false);
-  const [polling, setPolling] = useState(false);
-  const [pollTimedOut, setPollTimedOut] = useState(false);
-  const pollAttempts = useRef(0);
 
   const fetchInvoice = useCallback(async () => {
     const { data, error: rpcError } = await supabase
@@ -51,76 +35,6 @@ function PayInvoice() {
   useEffect(() => {
     fetchInvoice();
   }, [fetchInvoice]);
-
-  useEffect(() => {
-    if (searchParams.get("payment") !== "success") return;
-
-    setPolling(true);
-    setPollTimedOut(false);
-    pollAttempts.current = 0;
-
-    const interval = setInterval(async () => {
-      pollAttempts.current += 1;
-
-      const updated = await fetchInvoice();
-
-      if (updated && updated.status === "paid") {
-        setPolling(false);
-        clearInterval(interval);
-        setSearchParams({}, { replace: true });
-        return;
-      }
-
-      if (pollAttempts.current >= POLL_MAX_ATTEMPTS) {
-        setPolling(false);
-        setPollTimedOut(true);
-        clearInterval(interval);
-        setSearchParams({}, { replace: true });
-      }
-    }, POLL_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
-
-  const handleManualRefresh = async () => {
-    await fetchInvoice();
-    setPollTimedOut(false);
-  };
-
-  const handlePay = async () => {
-    setError("");
-    setRedirecting(true);
-
-    try {
-      const response = await fetch(`${FUNCTIONS_URL}/payfast-invoice-checkout?token=${token}`);
-
-      if (!response.ok) {
-        const body = await response.text();
-        throw new Error(body || `Checkout setup failed (${response.status})`);
-      }
-
-      const { action, fields } = await response.json();
-
-      const form = document.createElement("form");
-      form.method = "POST";
-      form.action = action;
-
-      Object.entries(fields).forEach(([key, value]) => {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = key;
-        input.value = value;
-        form.appendChild(input);
-      });
-
-      document.body.appendChild(form);
-      form.submit();
-    } catch (err) {
-      setRedirecting(false);
-      setError(`Could not start payment: ${err.message}`);
-    }
-  };
 
   if (loading) {
     return (
@@ -151,6 +65,7 @@ function PayInvoice() {
 
   const dueDate = formatDueDate(invoice.due_date);
   const isPaid = invoice.status === "paid";
+  const hasBankingDetails = !!(invoice.bank_account_number && invoice.bank_name);
 
   return (
     <div className="pay-page">
@@ -162,21 +77,6 @@ function PayInvoice() {
           <h1 className="pay-heading">Invoice {invoice.invoice_number}</h1>
           {invoice.customer_name && (
             <p className="pay-sub">Billed to {invoice.customer_name}</p>
-          )}
-
-          {polling && (
-            <p className="pay-status pay-status--polling">
-              Confirming your payment with PayFast — this can take a minute or so...
-            </p>
-          )}
-
-          {pollTimedOut && !isPaid && (
-            <p className="pay-status pay-status--warn">
-              Still waiting to hear back from PayFast.{" "}
-              <button className="pay-inline-link" onClick={handleManualRefresh}>
-                Check again
-              </button>
-            </p>
           )}
 
           {isPaid && <p className="pay-status pay-status--paid">✓ This invoice has been paid.</p>}
@@ -206,16 +106,51 @@ function PayInvoice() {
             <p className="pay-due-date">Due {dueDate}</p>
           )}
 
-          {error && <p className="pay-error">{error}</p>}
-
           {!isPaid && (
-            <button className="pay-btn" onClick={handlePay} disabled={redirecting || polling}>
-              {redirecting ? "Redirecting to PayFast..." : "Pay with PayFast"}
-            </button>
+            <div className="pay-bank-details">
+              <p className="pay-bank-details-heading">Payment details</p>
+              {hasBankingDetails ? (
+                <>
+                  <div className="pay-bank-row">
+                    <span className="pay-muted">Bank</span>
+                    <span>{invoice.bank_name}</span>
+                  </div>
+                  <div className="pay-bank-row">
+                    <span className="pay-muted">Account holder</span>
+                    <span>{invoice.bank_account_holder}</span>
+                  </div>
+                  <div className="pay-bank-row">
+                    <span className="pay-muted">Account number</span>
+                    <span>{invoice.bank_account_number}</span>
+                  </div>
+                  {invoice.bank_branch_code && (
+                    <div className="pay-bank-row">
+                      <span className="pay-muted">Branch code</span>
+                      <span>{invoice.bank_branch_code}</span>
+                    </div>
+                  )}
+                  {invoice.bank_account_type && (
+                    <div className="pay-bank-row">
+                      <span className="pay-muted">Account type</span>
+                      <span>{invoice.bank_account_type}</span>
+                    </div>
+                  )}
+                  <p className="pay-bank-reference">
+                    {invoice.bank_payment_reference_note ||
+                      `Please use "${invoice.invoice_number}" as your payment reference.`}
+                  </p>
+                </>
+              ) : (
+                <p className="pay-sub">
+                  This business hasn't added their payment details yet. Please contact them
+                  directly to arrange payment.
+                </p>
+              )}
+            </div>
           )}
         </div>
 
-        <p className="pay-footnote">Payments are processed securely by PayFast.</p>
+        <p className="pay-footnote">Please allow 1–2 business days for EFT payments to reflect.</p>
       </div>
     </div>
   );
