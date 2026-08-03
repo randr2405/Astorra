@@ -2,7 +2,6 @@ import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_EMAIL = Deno.env.get("SEND_FROM_EMAIL") || "onboarding@resend.dev";
-const SITE_URL = Deno.env.get("SITE_URL") || "http://localhost:3000";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { type, number, toEmail, toName, pdfBase64, businessName, publicToken } = await req.json();
+    const { type, number, toEmail, toName, pdfBase64, businessName } = await req.json();
 
     if (!toEmail || !pdfBase64 || !number) {
       return new Response(JSON.stringify({ error: "Missing required fields" }), {
@@ -27,24 +26,6 @@ serve(async (req) => {
     const label = type === "invoice" ? "Invoice" : "Quote";
     const subject = `${label} ${number} from ${businessName || "your supplier"}`;
     const filename = `${type}-${number}.pdf`;
-
-    // Only invoices carry a public_token — quotes have nothing to pay yet.
-    const payUrl = type === "invoice" && publicToken
-      ? `${SITE_URL}/pay/${publicToken}`
-      : null;
-
-    const payButtonHtml = payUrl
-      ? `
-        <div style="margin: 24px 0;">
-          <a href="${payUrl}"
-             style="background-color:#185fa5;color:#ffffff;padding:12px 24px;
-                    border-radius:6px;text-decoration:none;font-family:sans-serif;
-                    font-weight:600;display:inline-block;">
-            Pay Now
-          </a>
-        </div>
-      `
-      : "";
 
     const emailRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -59,7 +40,6 @@ serve(async (req) => {
         html: `
           <p>Hi ${toName || ""},</p>
           <p>Please find attached ${label.toLowerCase()} ${number} from ${businessName || "us"}.</p>
-          ${payButtonHtml}
         `,
         attachments: [
           {
