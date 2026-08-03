@@ -89,14 +89,32 @@ Deno.serve(async (req) => {
 
   const html = `<!DOCTYPE html>
 <html>
-  <head><title>Redirecting to PayFast…</title></head>
+  <head>
+    <title>Redirecting to PayFast…</title>
+    <style>
+      body { font-family: sans-serif; text-align: center; padding-top: 80px; }
+      button { padding: 14px 28px; font-size: 16px; cursor: pointer; }
+    </style>
+  </head>
   <body>
     <p>Redirecting you to PayFast to complete payment…</p>
     <form id="pf-form" action="https://${PAYFAST_HOST}/eng/process" method="post">
       ${inputs}
       <input type="hidden" name="signature" value="${signature}" />
+      <noscript><button type="submit">Continue to PayFast</button></noscript>
     </form>
-    <script>document.getElementById('pf-form').submit();</script>
+    <button id="pf-fallback-btn" style="display:none;" onclick="document.getElementById('pf-form').submit()">
+      Continue to PayFast
+    </button>
+    <script>
+      // If the browser blocks this auto-submit (some ad blockers / extensions
+      // do), show a manual button after a short delay instead of leaving the
+      // user stuck on a blank-looking page.
+      var fallbackTimer = setTimeout(function () {
+        document.getElementById('pf-fallback-btn').style.display = 'inline-block';
+      }, 1500);
+      document.getElementById('pf-form').submit();
+    </script>
   </body>
 </html>`;
 
