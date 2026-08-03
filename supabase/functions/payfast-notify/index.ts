@@ -37,6 +37,8 @@ Deno.serve(async (req) => {
   const data = Object.fromEntries(bodyEntries);
 
   // 1. Signature check
+  console.log("PayFast ITN debug — raw body:", rawBody);
+  console.log("PayFast ITN debug — parsed entries:", JSON.stringify(bodyEntries));
   if (!verifyItnSignature(bodyEntries, PASSPHRASE)) {
     console.error("PayFast ITN: signature mismatch", data.m_payment_id);
     return new Response("Invalid signature", { status: 400 });
