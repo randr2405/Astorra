@@ -7,6 +7,11 @@
 // or spoofed.
 //
 // Must respond fast with a 200, and PayFast expects no particular body.
+//
+// TEMPORARY DEBUG LOGGING — remove once the signature mismatch is fixed.
+// Logs the raw body, parsed entries, and passphrase length/char codes so
+// we can hand-verify the exact string being hashed. Never logs the
+// passphrase itself, only its length and character codes.
 
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { verifyItnSignature, confirmWithPayFast } from "../_shared/payfast.ts";
@@ -31,14 +36,24 @@ Deno.serve(async (req) => {
     return new Response("Method not allowed", { status: 405 });
   }
 
+  // TEMPORARY DEBUG — passphrase length/char codes only, never the value.
+  console.log(
+    "PASSPHRASE DEBUG — length:",
+    PASSPHRASE.length,
+    "codes:",
+    [...PASSPHRASE].map((c) => c.charCodeAt(0)).join(",")
+  );
+
   const rawBody = await req.text();
   const params = new URLSearchParams(rawBody);
   const bodyEntries: [string, string][] = Array.from(params.entries());
   const data = Object.fromEntries(bodyEntries);
 
-  // 1. Signature check
+  // TEMPORARY DEBUG — remove once signature mismatch is resolved.
   console.log("PayFast ITN debug — raw body:", rawBody);
   console.log("PayFast ITN debug — parsed entries:", JSON.stringify(bodyEntries));
+
+  // 1. Signature check
   if (!verifyItnSignature(bodyEntries, PASSPHRASE)) {
     console.error("PayFast ITN: signature mismatch", data.m_payment_id);
     return new Response("Invalid signature", { status: 400 });
