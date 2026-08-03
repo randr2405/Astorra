@@ -30,6 +30,15 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
   const recCap = aiAccess.maxRecommendations;
   const noAiAccess = aiAccess.level === "none";
 
+  // Same lazy-reset handling as Billing.js: the actual DB rollover only
+  // happens when the ai-builder function runs, so if the reset date has
+  // already passed but no request has been made yet this month, treat
+  // usage as 0 rather than showing a stale number from last month.
+  const creditsLimit = aiAccess.monthlyCredits;
+  const businessResetAt = business?.ai_credits_reset_at ? new Date(business.ai_credits_reset_at) : null;
+  const isPastReset = businessResetAt ? new Date() >= businessResetAt : false;
+  const businessCreditsUsed = isPastReset ? 0 : business?.ai_credits_used ?? 0;
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!description.trim() || noAiAccess) return;
@@ -134,10 +143,14 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
     );
   }
 
-  const creditsLimit = credits?.limit;
-  const creditsUsed = credits?.used;
+  const creditsUsedDisplay = credits?.used ?? businessCreditsUsed;
+  const creditsLimitDisplay = credits?.limit ?? creditsLimit;
+  const creditsResetDisplay = credits?.resetAt ? new Date(credits.resetAt) : businessResetAt;
   const outOfCredits =
-    creditsLimit !== undefined && creditsLimit !== Infinity && creditsUsed !== undefined && creditsUsed >= creditsLimit;
+    creditsLimitDisplay !== undefined &&
+    creditsLimitDisplay !== Infinity &&
+    creditsUsedDisplay !== undefined &&
+    creditsUsedDisplay >= creditsLimitDisplay;
 
   return (
     <div className="aib-page">
@@ -155,12 +168,12 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
           Your {PLAN_NAME_FALLBACK(plan)} plan can install up to{" "}
           {recCap === Infinity ? "unlimited modules" : `${recCap} module${recCap === 1 ? "" : "s"}`} per
           AI Builder request.
-          {credits && creditsLimit !== undefined && (
+          {creditsLimitDisplay > 0 && (
             <>
               {" "}
-              {creditsLimit === Infinity
+              {creditsLimitDisplay === Infinity
                 ? "Unlimited AI Builder requests this month."
-                : `${Math.max(creditsLimit - creditsUsed, 0)} of ${creditsLimit} AI Builder requests left this month.`}
+                : `${Math.max(creditsLimitDisplay - creditsUsedDisplay, 0)} of ${creditsLimitDisplay} AI Builder requests left this month.`}
             </>
           )}
         </p>
