@@ -7,7 +7,6 @@ const INK = [30, 32, 36];          // near-black for headings/body
 const MUTED = [130, 132, 138];     // secondary text
 const HAIRLINE = [225, 226, 230];  // thin rules and dividers
 const ACCENT = [24, 60, 92];       // deep, muted navy — used sparingly
-const PAPER_TINT = [248, 248, 247]; // near-white row tint
 
 function statusLabel(status) {
   const map = {
@@ -39,7 +38,6 @@ function buildDocPdf({ type, number, business, customer, items, total, status })
   const doc = new jsPDF();
   const pageWidth = 210;
   const marginX = 24;
-  const contentWidth = pageWidth - marginX * 2;
   const label = type === "invoice" ? "Invoice" : "Quote";
 
   let y = 26;
