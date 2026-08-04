@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
@@ -14,6 +14,14 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
   const [result, setResult] = useState(null); // { mode, modules, reasoning, answer }
   const [installing, setInstalling] = useState(false);
   const [credits, setCredits] = useState(null); // { used, limit, resetAt }
+  const [textareaFocused, setTextareaFocused] = useState(false);
+
+  // Mount-in reveal animation (matches the rest of the app's .xxx-in pattern)
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setMounted(true), 30);
+    return () => clearTimeout(t);
+  }, []);
 
   const installed = business?.installed_modules || [];
   const plan = business?.plan || "free";
@@ -139,14 +147,27 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
       <div className="aib-page">
         <AppNav business={business} />
         <div className="aib-body">
-          <p className="aib-eyebrow">AI Builder</p>
-          <h1 className="aib-heading">AI Builder isn't included on your plan</h1>
-          <p className="aib-sub">
-            Upgrade to Starter or above to get AI-powered module recommendations and business insights.
-          </p>
-          <button className="aib-install-btn" onClick={() => navigate("/dashboard/billing")}>
-            View plans
-          </button>
+          <div className={`aib-hero ${mounted ? "aib-in" : ""}`}>
+            <div className="aib-badge">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+                  stroke="#fff"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+                <circle cx="12" cy="12" r="3.4" stroke="#fff" strokeWidth="1.8" />
+              </svg>
+            </div>
+            <p className="aib-eyebrow">AI Builder</p>
+            <h1 className="aib-heading">AI Builder isn't included on your plan</h1>
+            <p className="aib-sub">
+              Upgrade to Starter or above to get AI-powered module recommendations and business insights.
+            </p>
+            <button className="aib-install-btn" onClick={() => navigate("/dashboard/billing")}>
+              View plans
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -161,79 +182,178 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
     creditsUsedDisplay !== undefined &&
     creditsUsedDisplay >= creditsLimitDisplay;
 
+  const hasFiniteCredits = creditsLimitDisplay > 0 && creditsLimitDisplay !== Infinity;
+  const creditsPct = hasFiniteCredits
+    ? Math.min(100, Math.round((creditsUsedDisplay / creditsLimitDisplay) * 100))
+    : 0;
+  const creditsRunningLow = hasFiniteCredits && creditsUsedDisplay / creditsLimitDisplay >= 0.75;
+
   return (
     <div className="aib-page">
       <AppNav business={business} />
 
       <div className="aib-body">
-        <p className="aib-eyebrow">AI Builder</p>
-        <h1 className="aib-heading">Describe your problem, or ask about your business.</h1>
-        <p className="aib-sub">
-          Tell us what your business does and we'll recommend modules — or ask a question about
-          your business (like "how many customers do we have") and we'll answer using your actual
-          data.
-        </p>
-        <p className="aib-sub" style={{ fontSize: "12.5px", opacity: 0.75 }}>
-          Your {PLAN_NAME_FALLBACK(plan)} plan can install up to{" "}
-          {recCap === Infinity ? "unlimited modules" : `${recCap} module${recCap === 1 ? "" : "s"}`} per
-          AI Builder request.
-          {creditsLimitDisplay > 0 && (
-            <>
-              {" "}
-              {creditsLimitDisplay === Infinity
-                ? "Unlimited AI Builder requests this month."
-                : `${Math.max(creditsLimitDisplay - creditsUsedDisplay, 0)} of ${creditsLimitDisplay} AI Builder requests left this month${
-                    creditsResetDisplay ? ` (resets ${creditsResetDisplay.toLocaleDateString(undefined, { day: "numeric", month: "short" })})` : ""
-                  }.`}
-            </>
-          )}
-        </p>
-
-        <form className="aib-form" onSubmit={handleSubmit}>
-          <textarea
-            className="aib-textarea"
-            rows={4}
-            placeholder="e.g. We hire out equipment and need to track who has what — or ask: how many quotes did we send this month?"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-          <button type="submit" className="aib-submit" disabled={loading || !description.trim() || outOfCredits}>
-            {loading ? "Thinking..." : "Ask AI Builder"}
-          </button>
-        </form>
-
-        {outOfCredits && (
-          <p className="aib-cap-notice">
-            You've used all your AI Builder requests for this month.{" "}
-            <button className="aib-inline-link" onClick={() => navigate("/dashboard/billing")}>
-              Upgrade
-            </button>{" "}
-            for more, or wait until your credits reset.
+        <div className={`aib-hero ${mounted ? "aib-in" : ""}`}>
+          <div className="aib-badge">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path
+                d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+                stroke="#fff"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+              <circle cx="12" cy="12" r="3.4" stroke="#fff" strokeWidth="1.8" />
+            </svg>
+          </div>
+          <p className="aib-eyebrow">AI Builder</p>
+          <h1 className="aib-heading">Describe your problem, or ask about your business.</h1>
+          <p className="aib-sub">
+            Tell us what your business does and we'll recommend modules — or ask a question about
+            your business (like "how many customers do we have") and we'll answer using your actual
+            data.
           </p>
-        )}
+          <p className="aib-meta">
+            Your {PLAN_NAME_FALLBACK(plan)} plan can install up to{" "}
+            {recCap === Infinity ? "unlimited modules" : `${recCap} module${recCap === 1 ? "" : "s"}`} per
+            AI Builder request.
+          </p>
 
-        {error && <p className="aib-error">{error}</p>}
+          {creditsLimitDisplay > 0 && (
+            <div className="aib-credits-wrap">
+              <p className="aib-meta" style={{ margin: 0 }}>
+                {creditsLimitDisplay === Infinity
+                  ? "Unlimited AI Builder requests this month."
+                  : `${Math.max(creditsLimitDisplay - creditsUsedDisplay, 0)} of ${creditsLimitDisplay} AI Builder requests left this month${
+                      creditsResetDisplay
+                        ? ` (resets ${creditsResetDisplay.toLocaleDateString(undefined, { day: "numeric", month: "short" })})`
+                        : ""
+                    }.`}
+              </p>
+              {hasFiniteCredits && (
+                <div className="aib-credits-bar">
+                  <div
+                    className={`aib-credits-fill ${creditsRunningLow ? "aib-credits-fill--warn" : ""}`}
+                    style={{ "--fill": `${creditsPct}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className={`aib-form-wrap ${mounted ? "aib-in" : ""}`}>
+          <form className="aib-form" onSubmit={handleSubmit}>
+            <div className={`aib-textarea-wrap ${textareaFocused ? "aib-textarea-wrap--focus" : ""}`}>
+              <textarea
+                className="aib-textarea"
+                rows={4}
+                placeholder="e.g. We hire out equipment and need to track who has what — or ask: how many quotes did we send this month?"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                onFocus={() => setTextareaFocused(true)}
+                onBlur={() => setTextareaFocused(false)}
+              />
+            </div>
+
+            <div className="aib-form-footer">
+              <span className="aib-char-count">{description.length > 0 ? `${description.length} characters` : ""}</span>
+              <button type="submit" className="aib-submit" disabled={loading || !description.trim() || outOfCredits}>
+                {loading && <span className="aib-spinner" />}
+                {loading ? "Thinking..." : "Ask AI Builder"}
+              </button>
+            </div>
+          </form>
+
+          {loading && (
+            <div className="aib-thinking">
+              <span className="aib-thinking-dots">
+                <span />
+                <span />
+                <span />
+              </span>
+              Looking at your business and working out the best answer...
+            </div>
+          )}
+
+          {outOfCredits && (
+            <p className="aib-cap-notice" style={{ marginTop: 18 }}>
+              You've used all your AI Builder requests for this month.{" "}
+              <button className="aib-inline-link" onClick={() => navigate("/dashboard/billing")}>
+                Upgrade
+              </button>{" "}
+              for more, or wait until your credits reset.
+            </p>
+          )}
+
+          {error && (
+            <p className="aib-error">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
+                <path d="M12 8v5M12 16h.01" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              {error}
+            </p>
+          )}
+        </div>
 
         {result?.mode === "analysis" && (
-          <div className="aib-result">
+          <div className="aib-result aib-in">
+            <p className="aib-result-kicker">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                />
+                <circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth="1.8" />
+              </svg>
+              Answer
+            </p>
             <p className="aib-reasoning">{result.answer}</p>
           </div>
         )}
 
         {result?.mode === "modules" && (
-          <div className="aib-result">
+          <div className="aib-result aib-in">
             {result.modules.length === 0 ? (
-              <p className="aib-reasoning">{result.reasoning}</p>
+              <>
+                <p className="aib-result-kicker">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                    <circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth="1.8" />
+                  </svg>
+                  Recommendation
+                </p>
+                <p className="aib-reasoning">{result.reasoning}</p>
+              </>
             ) : (
               <>
+                <p className="aib-result-kicker">
+                  <svg viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M12 3v3M12 18v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M3 12h3M18 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                      strokeLinecap="round"
+                    />
+                    <circle cx="12" cy="12" r="3.4" stroke="currentColor" strokeWidth="1.8" />
+                  </svg>
+                  Recommended for you
+                </p>
                 <p className="aib-reasoning">{result.reasoning}</p>
 
                 <div className="aib-module-list">
-                  {result.modules.map((key) => {
+                  {result.modules.map((key, idx) => {
                     const mod = getModule(key);
                     if (!mod) return null;
                     return (
-                      <div className="aib-module-card" key={key}>
+                      <div className="aib-module-card" key={key} style={{ animationDelay: `${idx * 0.06}s` }}>
                         <div className="aib-module-icon">{mod.initial}</div>
                         <div>
                           <h3>{mod.name}</h3>
@@ -254,6 +374,7 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
                   </p>
                 ) : (
                   <button className="aib-install-btn" onClick={handleInstallAll} disabled={installing}>
+                    {installing && <span className="aib-spinner" />}
                     {installing ? "Installing..." : `Install ${result.modules.length > 1 ? "these modules" : "this module"}`}
                   </button>
                 )}
