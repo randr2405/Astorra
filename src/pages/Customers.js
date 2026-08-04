@@ -1,33 +1,141 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
 import AppNav from "../components/AppNav";
 import "./Customers.css";
 
+const currency = new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" });
+const dateFmt = (d) => (d ? new Date(d).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "—");
+
+const SORT_OPTIONS = [
+  { key: "recent", label: "Most recent" },
+  { key: "name_asc", label: "Name (A–Z)" },
+  { key: "name_desc", label: "Name (Z–A)" },
+  { key: "invoiced_desc", label: "Highest invoiced" },
+  { key: "outstanding_desc", label: "Highest outstanding" },
+];
+
+const STATUS_STYLES = {
+  paid: "cust-badge--good",
+  accepted: "cust-badge--good",
+  unpaid: "cust-badge--warn",
+  sent: "cust-badge--warn",
+  draft: "cust-badge--muted",
+  overdue: "cust-badge--bad",
+  declined: "cust-badge--bad",
+};
+
 function Customers({ business, appUser }) {
   const [customers, setCustomers] = useState([]);
+  const [invoicesByCustomer, setInvoicesByCustomer] = useState({});
+  const [quotesByCustomer, setQuotesByCustomer] = useState({});
   const [loading, setLoading] = useState(true);
+  const [loaded, setLoaded] = useState(false);
+
+  const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState("recent");
+
   const [modalOpen, setModalOpen] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [form, setForm] = useState({ name: "", email: "", phone: "", notes: "" });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [pendingDeleteId, setPendingDeleteId] = useState(null);
 
-  const fetchCustomers = useCallback(async () => {
+  const [drawerCustomer, setDrawerCustomer] = useState(null);
+
+  const fetchAll = useCallback(async () => {
     setLoading(true);
-    const { data, error: fetchError } = await supabase
-      .from("customers")
-      .select("*")
-      .eq("business_id", business.id)
-      .order("created_at", { ascending: false });
 
-    if (!fetchError) setCustomers(data || []);
+    const [{ data: customersData }, { data: invoicesData }, { data: quotesData }] = await Promise.all([
+      supabase.from("customers").select("*").eq("business_id", business.id).order("created_at", { ascending: false }),
+      supabase.from("invoices").select("id, customer_id, invoice_number, status, total, due_date, created_at").eq("business_id", business.id),
+      supabase.from("quotes").select("id, customer_id, quote_number, status, total, created_at").eq("business_id", business.id),
+    ]);
+
+    const invGroups = {};
+    (invoicesData || []).forEach((inv) => {
+      if (!inv.customer_id) return;
+      (invGroups[inv.customer_id] ||= []).push(inv);
+    });
+
+    const qGroups = {};
+    (quotesData || []).forEach((q) => {
+      if (!q.customer_id) return;
+      (qGroups[q.customer_id] ||= []).push(q);
+    });
+
+    setCustomers(customersData || []);
+    setInvoicesByCustomer(invGroups);
+    setQuotesByCustomer(qGroups);
     setLoading(false);
   }, [business.id]);
 
   useEffect(() => {
-    fetchCustomers();
-  }, [fetchCustomers]);
+    fetchAll();
+  }, [fetchAll]);
+
+  useEffect(() => {
+    if (!loading) {
+      const t = setTimeout(() => setLoaded(true), 40);
+      return () => clearTimeout(t);
+    }
+  }, [loading]);
+
+  // Keep the open drawer's data in sync after edits/refetches.
+  useEffect(() => {
+    if (!drawerCustomer) return;
+    const fresh = customers.find((c) => c.id === drawerCustomer.id);
+    if (fresh) setDrawerCustomer(fresh);
+  }, [customers]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const financials = useMemo(() => {
+    const map = {};
+    customers.forEach((c) => {
+      const invoices = invoicesByCustomer[c.id] || [];
+      const quotes = quotesByCustomer[c.id] || [];
+      const totalInvoiced = invoices.reduce((sum, i) => sum + Number(i.total || 0), 0);
+      const outstanding = invoices
+        .filter((i) => i.status === "unpaid" || i.status === "overdue")
+        .reduce((sum, i) => sum + Number(i.total || 0), 0);
+      map[c.id] = {
+        totalInvoiced,
+        outstanding,
+        invoicesCount: invoices.length,
+        quotesCount: quotes.length,
+      };
+    });
+    return map;
+  }, [customers, invoicesByCustomer, quotesByCustomer]);
+
+  const visibleCustomers = useMemo(() => {
+    let list = customers;
+
+    if (query.trim()) {
+      const q = query.trim().toLowerCase();
+      list = list.filter(
+        (c) =>
+          c.name?.toLowerCase().includes(q) ||
+          c.email?.toLowerCase().includes(q) ||
+          c.phone?.toLowerCase().includes(q)
+      );
+    }
+
+    const withFinancials = list.map((c) => ({ ...c, _f: financials[c.id] || { totalInvoiced: 0, outstanding: 0, quotesCount: 0 } }));
+
+    switch (sortKey) {
+      case "name_asc":
+        return withFinancials.sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+      case "name_desc":
+        return withFinancials.sort((a, b) => (b.name || "").localeCompare(a.name || ""));
+      case "invoiced_desc":
+        return withFinancials.sort((a, b) => b._f.totalInvoiced - a._f.totalInvoiced);
+      case "outstanding_desc":
+        return withFinancials.sort((a, b) => b._f.outstanding - a._f.outstanding);
+      default:
+        return withFinancials.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    }
+  }, [customers, query, sortKey, financials]);
 
   const openAddModal = () => {
     setEditingCustomer(null);
@@ -61,12 +169,7 @@ function Customers({ business, appUser }) {
     if (editingCustomer) {
       const { error: updateError } = await supabase
         .from("customers")
-        .update({
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          notes: form.notes,
-        })
+        .update({ name: form.name, email: form.email, phone: form.phone, notes: form.notes })
         .eq("id", editingCustomer.id);
 
       if (updateError) {
@@ -92,18 +195,16 @@ function Customers({ business, appUser }) {
 
     setSaving(false);
     closeModal();
-    fetchCustomers();
+    fetchAll();
   };
 
   const handleDelete = async (customer) => {
-    if (!window.confirm(`Delete ${customer.name}? This can't be undone.`)) return;
-
-    const { error: deleteError } = await supabase
-      .from("customers")
-      .delete()
-      .eq("id", customer.id);
-
-    if (!deleteError) fetchCustomers();
+    setPendingDeleteId(null);
+    const { error: deleteError } = await supabase.from("customers").delete().eq("id", customer.id);
+    if (!deleteError) {
+      if (drawerCustomer?.id === customer.id) setDrawerCustomer(null);
+      fetchAll();
+    }
   };
 
   return (
@@ -111,7 +212,7 @@ function Customers({ business, appUser }) {
       <AppNav business={business} />
 
       <div className="cust-body">
-        <div className="cust-header">
+        <div className={`cust-header ${loaded ? "cust-in" : ""}`}>
           <div>
             <p className="cust-eyebrow">Customers</p>
             <h1 className="cust-heading">Your customer records</h1>
@@ -121,41 +222,127 @@ function Customers({ business, appUser }) {
           </button>
         </div>
 
+        <div className={`cust-toolbar ${loaded ? "cust-in" : ""}`}>
+          <div className="cust-search">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+              <path d="M21 21l-4.3-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search by name, email, or phone..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            {query && (
+              <button className="cust-search-clear" onClick={() => setQuery("")} aria-label="Clear search">
+                ×
+              </button>
+            )}
+          </div>
+
+          <div className="cust-sort">
+            <label htmlFor="cust-sort-select">Sort</label>
+            <select id="cust-sort-select" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
+              {SORT_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {loading ? (
-          <p className="cust-muted">Loading...</p>
+          <div className="cust-table-wrap cust-in mkt-in">
+            <div className="cust-skeleton">
+              {[...Array(4)].map((_, i) => (
+                <div className="cust-skeleton-row" key={i} style={{ animationDelay: `${i * 80}ms` }} />
+              ))}
+            </div>
+          </div>
         ) : customers.length === 0 ? (
-          <div className="cust-empty">
-            No customers yet. Add your first one to get started.
+          <div className="cust-empty cust-in">
+            <div className="cust-empty-icon">+</div>
+            <h3>No customers yet</h3>
+            <p>Add your first customer to start tracking quotes and invoices for them.</p>
+            <button className="cust-add-btn" onClick={openAddModal}>
+              + Add customer
+            </button>
+          </div>
+        ) : visibleCustomers.length === 0 ? (
+          <div className="cust-empty cust-in">
+            <div className="cust-empty-icon">?</div>
+            <h3>No matches for "{query}"</h3>
+            <p>Try a different name, email, or phone number.</p>
+            <button className="cust-inline-link" onClick={() => setQuery("")}>
+              Clear search
+            </button>
           </div>
         ) : (
-          <div className="cust-table-wrap">
+          <div className={`cust-table-wrap ${loaded ? "cust-in" : ""}`}>
             <table className="cust-table">
               <thead>
                 <tr>
                   <th>Name</th>
-                  <th>Email</th>
-                  <th>Phone</th>
+                  <th>Contact</th>
+                  <th>Invoiced</th>
+                  <th>Outstanding</th>
+                  <th>Quotes</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {customers.map((c) => (
-                  <tr key={c.id}>
+                {visibleCustomers.map((c, i) => (
+                  <tr
+                    key={c.id}
+                    className="cust-row"
+                    style={{ animationDelay: loaded ? `${Math.min(i, 12) * 35}ms` : "0ms" }}
+                    onClick={() => setDrawerCustomer(c)}
+                  >
                     <td className="cust-name-cell">{c.name}</td>
-                    <td className={c.email ? "" : "cust-muted"}>{c.email || "—"}</td>
-                    <td className={c.phone ? "" : "cust-muted"}>{c.phone || "—"}</td>
                     <td>
-                      <div className="cust-actions-cell">
-                        <button className="cust-action-btn" onClick={() => openEditModal(c)}>
-                          Edit
-                        </button>
-                        <button
-                          className="cust-action-btn cust-action-btn--danger"
-                          onClick={() => handleDelete(c)}
-                        >
-                          Delete
-                        </button>
+                      <div className="cust-contact-cell">
+                        <span className={c.email ? "" : "cust-muted"}>{c.email || "—"}</span>
+                        <span className={c.phone ? "cust-contact-sub" : "cust-muted cust-contact-sub"}>
+                          {c.phone || "No phone"}
+                        </span>
                       </div>
+                    </td>
+                    <td className={c._f.totalInvoiced ? "cust-amount" : "cust-muted"}>
+                      {c._f.totalInvoiced ? currency.format(c._f.totalInvoiced) : "—"}
+                    </td>
+                    <td>
+                      {c._f.outstanding > 0 ? (
+                        <span className="cust-badge cust-badge--warn">{currency.format(c._f.outstanding)}</span>
+                      ) : (
+                        <span className="cust-muted">—</span>
+                      )}
+                    </td>
+                    <td className={c._f.quotesCount ? "" : "cust-muted"}>{c._f.quotesCount || "—"}</td>
+                    <td onClick={(e) => e.stopPropagation()}>
+                      {pendingDeleteId === c.id ? (
+                        <div className="cust-confirm-row">
+                          <button className="cust-confirm-yes" onClick={() => handleDelete(c)}>
+                            Delete
+                          </button>
+                          <button className="cust-confirm-no" onClick={() => setPendingDeleteId(null)}>
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="cust-actions-cell">
+                          <button className="cust-action-btn" onClick={() => openEditModal(c)}>
+                            Edit
+                          </button>
+                          <button
+                            className="cust-action-btn cust-action-btn--danger"
+                            onClick={() => setPendingDeleteId(c.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -165,6 +352,7 @@ function Customers({ business, appUser }) {
         )}
       </div>
 
+      {/* Add / edit modal */}
       {modalOpen && (
         <div className="cust-modal-overlay" onClick={closeModal}>
           <div className="cust-modal" onClick={(e) => e.stopPropagation()}>
@@ -212,10 +400,134 @@ function Customers({ business, appUser }) {
                   Cancel
                 </button>
                 <button type="submit" className="cust-add-btn" disabled={saving}>
-                  {saving ? "Saving..." : editingCustomer ? "Save changes" : "Add customer"}
+                  {saving ? <span className="cust-spinner" /> : editingCustomer ? "Save changes" : "Add customer"}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Detail drawer */}
+      {drawerCustomer && (
+        <div className="cust-drawer-overlay" onClick={() => setDrawerCustomer(null)}>
+          <div className="cust-drawer" onClick={(e) => e.stopPropagation()}>
+            <div className="cust-drawer-header">
+              <div className="cust-drawer-avatar">
+                {(drawerCustomer.name || "?")
+                  .split(" ")
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((w) => w[0]?.toUpperCase())
+                  .join("")}
+              </div>
+              <div>
+                <h2>{drawerCustomer.name}</h2>
+                <p>
+                  {drawerCustomer.email || "No email"} · {drawerCustomer.phone || "No phone"}
+                </p>
+              </div>
+              <button className="cust-drawer-close" onClick={() => setDrawerCustomer(null)} aria-label="Close">
+                ×
+              </button>
+            </div>
+
+            <div className="cust-stat-row">
+              <div className="cust-stat-card">
+                <span className="cust-stat-label">Total invoiced</span>
+                <span className="cust-stat-value">
+                  {currency.format(financials[drawerCustomer.id]?.totalInvoiced || 0)}
+                </span>
+              </div>
+              <div className="cust-stat-card">
+                <span className="cust-stat-label">Outstanding</span>
+                <span
+                  className={`cust-stat-value ${
+                    financials[drawerCustomer.id]?.outstanding > 0 ? "cust-stat-value--warn" : ""
+                  }`}
+                >
+                  {currency.format(financials[drawerCustomer.id]?.outstanding || 0)}
+                </span>
+              </div>
+              <div className="cust-stat-card">
+                <span className="cust-stat-label">Quotes</span>
+                <span className="cust-stat-value">{financials[drawerCustomer.id]?.quotesCount || 0}</span>
+              </div>
+            </div>
+
+            {drawerCustomer.notes && (
+              <div className="cust-drawer-notes">
+                <p className="cust-drawer-section-title">Notes</p>
+                <p>{drawerCustomer.notes}</p>
+              </div>
+            )}
+
+            <div className="cust-drawer-section">
+              <p className="cust-drawer-section-title">Invoices</p>
+              {(invoicesByCustomer[drawerCustomer.id] || []).length === 0 ? (
+                <p className="cust-drawer-empty">No invoices for this customer yet.</p>
+              ) : (
+                <ul className="cust-drawer-list">
+                  {(invoicesByCustomer[drawerCustomer.id] || [])
+                    .slice()
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                    .map((inv) => (
+                      <li key={inv.id}>
+                        <div>
+                          <span className="cust-drawer-list-title">{inv.invoice_number}</span>
+                          <span className="cust-drawer-list-sub">Due {dateFmt(inv.due_date)}</span>
+                        </div>
+                        <div className="cust-drawer-list-right">
+                          <span className={`cust-badge ${STATUS_STYLES[inv.status] || "cust-badge--muted"}`}>
+                            {inv.status}
+                          </span>
+                          <span className="cust-drawer-list-amount">{currency.format(inv.total || 0)}</span>
+                        </div>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="cust-drawer-section">
+              <p className="cust-drawer-section-title">Quotes</p>
+              {(quotesByCustomer[drawerCustomer.id] || []).length === 0 ? (
+                <p className="cust-drawer-empty">No quotes for this customer yet.</p>
+              ) : (
+                <ul className="cust-drawer-list">
+                  {(quotesByCustomer[drawerCustomer.id] || [])
+                    .slice()
+                    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                    .map((q) => (
+                      <li key={q.id}>
+                        <div>
+                          <span className="cust-drawer-list-title">{q.quote_number}</span>
+                          <span className="cust-drawer-list-sub">{dateFmt(q.created_at)}</span>
+                        </div>
+                        <div className="cust-drawer-list-right">
+                          <span className={`cust-badge ${STATUS_STYLES[q.status] || "cust-badge--muted"}`}>
+                            {q.status}
+                          </span>
+                          <span className="cust-drawer-list-amount">{currency.format(q.total || 0)}</span>
+                        </div>
+                      </li>
+                    ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="cust-drawer-footer">
+              <button
+                className="cust-cancel-btn"
+                onClick={() => {
+                  const c = drawerCustomer;
+                  setDrawerCustomer(null);
+                  openEditModal(c);
+                }}
+              >
+                Edit customer
+              </button>
+            </div>
           </div>
         </div>
       )}
