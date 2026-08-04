@@ -163,9 +163,10 @@ function Notifications({ business }) {
 
   // Clean up any in-flight undo timers if the component unmounts.
   useEffect(() => {
+    const pendingDeletes = pendingDeletesRef.current;
     return () => {
-      pendingDeletesRef.current.forEach(({ timerId }) => clearTimeout(timerId));
-      pendingDeletesRef.current.clear();
+      pendingDeletes.forEach(({ timerId }) => clearTimeout(timerId));
+      pendingDeletes.clear();
     };
   }, []);
 
