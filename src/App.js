@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "./lib/firebase";
@@ -29,24 +29,41 @@ function App() {
   const [appUser, setAppUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Mirrors `business` so the auth listener below can check the latest
+  // value without needing `business` in its dependency array (which would
+  // re-subscribe the listener on every business update).
+  const businessRef = useRef(null);
+  useEffect(() => {
+    businessRef.current = business;
+  }, [business]);
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        const { data } = await supabase
-          .from("users")
-          .select("*, businesses(*)")
-          .eq("firebase_uid", currentUser.uid)
-          .maybeSingle();
 
-        if (data?.businesses) {
-          setBusiness(data.businesses);
-          setAppUser(data);
+      if (currentUser) {
+        // onAuthStateChanged fires again on silent token refresh (roughly
+        // hourly) and other auth churn, not just sign-in. If we already
+        // have a business loaded for this session, skip the Supabase
+        // re-fetch so it can't overwrite fresher state (e.g. a module
+        // just installed/uninstalled via Marketplace's onBusinessUpdate).
+        if (!businessRef.current) {
+          const { data } = await supabase
+            .from("users")
+            .select("*, businesses(*)")
+            .eq("firebase_uid", currentUser.uid)
+            .maybeSingle();
+
+          if (data?.businesses) {
+            setBusiness(data.businesses);
+            setAppUser(data);
+          }
         }
       } else {
         setBusiness(null);
         setAppUser(null);
       }
+
       setLoading(false);
     });
     return unsubscribe;
