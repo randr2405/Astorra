@@ -109,19 +109,22 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
       return;
     }
 
+    // Capture position BEFORE the await — the event object may not
+    // survive the async gap depending on your React version.
+    let burstPos = null;
+    if (e) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      burstPos = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
+
     setBusyKey(mod.key);
     const next = [...installed, mod.key];
     const ok = await persistModules(next);
     setBusyKey(null);
 
     if (ok) {
-      if (e) {
-        const rect = e.currentTarget.getBoundingClientRect();
-        setConfetti({
-          key: Date.now(),
-          x: rect.left + rect.width / 2,
-          y: rect.top + rect.height / 2,
-        });
+      if (burstPos) {
+        setConfetti({ key: Date.now(), ...burstPos });
       }
       setToast({ type: "success", text: `${mod.name} installed` });
       notify(business.id, appUser?.id, `"${mod.name}" module was installed.`);
