@@ -135,9 +135,26 @@ function Notifications({ business }) {
   }, [fetchNotifications]);
 
   // Realtime: keep the list live without needing a manual refresh.
+  //
+  // supabase-js caches channels by topic name. If a channel with this same
+  // name already exists and is already subscribed (e.g. React 18 StrictMode
+  // double-invoking effects in dev, or a remount before the previous
+  // cleanup finished), calling `.channel()` again returns that *existing,
+  // already-subscribed* channel — and calling `.on()` on an
+  // already-subscribed channel throws synchronously, which crashes the
+  // whole render tree. Guard against that by removing any stale channel
+  // with the same topic before creating a fresh one.
   useEffect(() => {
+    const channelName = `notifications-${business.id}`;
+    const topic = `realtime:${channelName}`;
+
+    const existing = supabase.getChannels().find((c) => c.topic === topic);
+    if (existing) {
+      supabase.removeChannel(existing);
+    }
+
     const channel = supabase
-      .channel(`notifications-${business.id}`)
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "notifications", filter: `business_id=eq.${business.id}` },
