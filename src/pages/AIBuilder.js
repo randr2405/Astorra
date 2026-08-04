@@ -89,30 +89,39 @@ function AIBuilder({ business, appUser, onBusinessUpdate }) {
 
     setInstalling(true);
     const toInstall = result.modules.slice(0, room);
-    const nextModules = [...installed, ...toInstall];
 
-    const { data, error: updateError } = await supabase
-      .from("businesses")
-      .update({ installed_modules: nextModules })
-      .eq("id", business.id)
-      .select()
-      .single();
+    const { data, error: rpcError } = await supabase.rpc("install_modules", {
+      p_business_id: business.id,
+      p_module_keys: toInstall,
+      p_limit: limit,
+    });
 
     setInstalling(false);
 
-    if (updateError) {
-      setError(updateError.message);
+    if (rpcError) {
+      if (rpcError.message.includes("NOT_AUTHORIZED")) {
+        setError("You don't have permission to modify this business.");
+      } else {
+        setError(rpcError.message);
+      }
       return;
     }
 
     if (onBusinessUpdate) onBusinessUpdate(data);
 
-    const names = toInstall.map((k) => getModule(k)?.name || k).join(", ");
-    notify(business.id, appUser?.id, `AI Builder installed: ${names}.`);
+    // The RPC silently stops adding once the plan cap is hit, so compare
+    // what we asked for against what actually landed to know if anything
+    // got dropped (e.g. another tab/install landed in between).
+    const actuallyInstalled = toInstall.filter((k) => data.installed_modules.includes(k));
+    const names = actuallyInstalled.map((k) => getModule(k)?.name || k).join(", ");
 
-    if (toInstall.length < result.modules.length) {
+    if (actuallyInstalled.length > 0) {
+      notify(business.id, appUser?.id, `AI Builder installed: ${names}.`);
+    }
+
+    if (actuallyInstalled.length < result.modules.length) {
       setError(
-        `Installed ${toInstall.length} of ${result.modules.length} recommended modules — ` +
+        `Installed ${actuallyInstalled.length} of ${result.modules.length} recommended modules — ` +
           (room === roomByPlan
             ? `your plan is now at its module limit.`
             : `your ${plan} plan's AI Builder limit is ${recCap} module${recCap === 1 ? "" : "s"} per request.`)

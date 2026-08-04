@@ -84,23 +84,11 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const persistModules = async (nextModules) => {
-    const { data, error: updateError } = await supabase
-      .from("businesses")
-      .update({ installed_modules: nextModules })
-      .eq("id", business.id)
-      .select()
-      .single();
-
-    if (updateError) {
-      setError(updateError.message);
-      return false;
-    }
-
-    setInstalled(nextModules);
-    if (onBusinessUpdate) onBusinessUpdate(data);
-    return true;
-  };
+  // Keep local `installed` in sync if the business prop changes from
+  // elsewhere (e.g. AI Builder installing modules, then navigating here).
+  useEffect(() => {
+    setInstalled(business?.installed_modules || []);
+  }, [business?.installed_modules]);
 
   const handleInstall = async (mod, e) => {
     setError("");
@@ -118,31 +106,56 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
     }
 
     setBusyKey(mod.key);
-    const next = [...installed, mod.key];
-    const ok = await persistModules(next);
+
+    const { data, error: rpcError } = await supabase.rpc("install_module", {
+      p_business_id: business.id,
+      p_module_key: mod.key,
+      p_limit: limit,
+    });
+
     setBusyKey(null);
 
-    if (ok) {
-      if (burstPos) {
-        setConfetti({ key: Date.now(), ...burstPos });
+    if (rpcError) {
+      if (rpcError.message.includes("MODULE_LIMIT_REACHED")) {
+        setError(`Your ${plan} plan includes up to ${limit} modules. Upgrade to install more.`);
+      } else {
+        setError(rpcError.message);
       }
-      setToast({ type: "success", text: `${mod.name} installed` });
-      notify(business.id, appUser?.id, `"${mod.name}" module was installed.`);
+      return;
     }
+
+    setInstalled(data.installed_modules);
+    if (onBusinessUpdate) onBusinessUpdate(data);
+
+    if (burstPos) {
+      setConfetti({ key: Date.now(), ...burstPos });
+    }
+    setToast({ type: "success", text: `${mod.name} installed` });
+    notify(business.id, appUser?.id, `"${mod.name}" module was installed.`);
   };
 
   const handleUninstall = async (mod) => {
     setPendingRemoveKey(null);
     setError("");
     setBusyKey(mod.key);
-    const next = installed.filter((k) => k !== mod.key);
-    const ok = await persistModules(next);
+
+    const { data, error: rpcError } = await supabase.rpc("uninstall_module", {
+      p_business_id: business.id,
+      p_module_key: mod.key,
+    });
+
     setBusyKey(null);
 
-    if (ok) {
-      setToast({ type: "neutral", text: `${mod.name} removed` });
-      notify(business.id, appUser?.id, `"${mod.name}" module was removed.`);
+    if (rpcError) {
+      setError(rpcError.message);
+      return;
     }
+
+    setInstalled(data.installed_modules);
+    if (onBusinessUpdate) onBusinessUpdate(data);
+
+    setToast({ type: "neutral", text: `${mod.name} removed` });
+    notify(business.id, appUser?.id, `"${mod.name}" module was removed.`);
   };
 
   const filteredModules = useMemo(() => {
