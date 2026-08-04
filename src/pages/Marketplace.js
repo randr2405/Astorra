@@ -7,6 +7,54 @@ import AppNav from "../components/AppNav";
 import "./Marketplace.css";
 
 const CATEGORIES = ["All", "Sales", "Finance", "Operations", "HR"];
+const CONFETTI_COLORS = ["#7c3aed", "#3b82f6", "#14b8a6", "#f59e0b", "#fdfdfe"];
+
+function ConfettiBurst({ x, y, onDone }) {
+  const pieces = useMemo(
+    () =>
+      Array.from({ length: 18 }, (_, i) => {
+        const angle = ((360 / 18) * i + (Math.random() * 20 - 10)) * (Math.PI / 180);
+        const distance = 60 + Math.random() * 50;
+        return {
+          id: i,
+          dx: Math.cos(angle) * distance,
+          dy: Math.sin(angle) * distance + 24,
+          size: 5 + Math.random() * 4,
+          color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+          rotate: Math.random() * 360,
+          delay: Math.random() * 60,
+          shape: Math.random() > 0.5 ? "50%" : "2px",
+        };
+      }),
+    []
+  );
+
+  useEffect(() => {
+    const t = setTimeout(onDone, 750);
+    return () => clearTimeout(t);
+  }, [onDone]);
+
+  return (
+    <div className="mkt-confetti-root" style={{ left: x, top: y }}>
+      {pieces.map((p) => (
+        <span
+          key={p.id}
+          className="mkt-confetti-piece"
+          style={{
+            "--dx": `${p.dx}px`,
+            "--dy": `${p.dy}px`,
+            "--rotate": `${p.rotate}deg`,
+            "--delay": `${p.delay}ms`,
+            width: p.size,
+            height: p.size,
+            background: p.color,
+            borderRadius: p.shape,
+          }}
+        />
+      ))}
+    </div>
+  );
+}
 
 function Marketplace({ business, appUser, onBusinessUpdate }) {
   const navigate = useNavigate();
@@ -17,6 +65,7 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
   const [pendingRemoveKey, setPendingRemoveKey] = useState(null);
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
+  const [confetti, setConfetti] = useState(null);
   const [loaded, setLoaded] = useState(false);
 
   const plan = business?.plan || "free";
@@ -53,7 +102,7 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
     return true;
   };
 
-  const handleInstall = async (mod) => {
+  const handleInstall = async (mod, e) => {
     setError("");
     if (atCap) {
       setError(`Your ${plan} plan includes up to ${limit} modules. Upgrade to install more.`);
@@ -66,6 +115,14 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
     setBusyKey(null);
 
     if (ok) {
+      if (e) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setConfetti({
+          key: Date.now(),
+          x: rect.left + rect.width / 2,
+          y: rect.top + rect.height / 2,
+        });
+      }
       setToast({ type: "success", text: `${mod.name} installed` });
       notify(business.id, appUser?.id, `"${mod.name}" module was installed.`);
     }
@@ -110,7 +167,13 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
               your {plan.charAt(0).toUpperCase() + plan.slice(1)} plan.
             </p>
             {limit !== Infinity && (
-              <div className="mkt-progress-track" role="progressbar" aria-valuenow={installed.length} aria-valuemin={0} aria-valuemax={limit}>
+              <div
+                className="mkt-progress-track"
+                role="progressbar"
+                aria-valuenow={installed.length}
+                aria-valuemin={0}
+                aria-valuemax={limit}
+              >
                 <div
                   className={`mkt-progress-fill ${atCap ? "mkt-progress-fill--full" : ""}`}
                   style={{ width: `${pctFilled}%` }}
@@ -237,14 +300,10 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
                     ) : (
                       <button
                         className={`mkt-install-btn ${isBusy ? "mkt-install-btn--busy" : ""}`}
-                        onClick={() => handleInstall(mod)}
+                        onClick={(e) => handleInstall(mod, e)}
                         disabled={isBusy || atCap}
                       >
-                        {isBusy ? (
-                          <span className="mkt-spinner" />
-                        ) : (
-                          "Install"
-                        )}
+                        {isBusy ? <span className="mkt-spinner" /> : "Install"}
                       </button>
                     )}
                   </div>
@@ -260,6 +319,15 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
           <a href="mailto:info@rragencies.co.za">get in touch</a> for a custom scope.
         </div>
       </div>
+
+      {confetti && (
+        <ConfettiBurst
+          key={confetti.key}
+          x={confetti.x}
+          y={confetti.y}
+          onDone={() => setConfetti(null)}
+        />
+      )}
 
       {toast && (
         <div className={`mkt-toast mkt-toast--${toast.type}`}>

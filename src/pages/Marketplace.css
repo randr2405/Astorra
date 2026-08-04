@@ -543,6 +543,37 @@
   }
 }
 
+.mkt-confetti-root {
+  position: fixed;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  z-index: 60;
+}
+
+.mkt-confetti-piece {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  animation: mkt-confetti-fly 0.7s ease-out forwards;
+  animation-delay: var(--delay);
+}
+
+@keyframes mkt-confetti-fly {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  15% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(var(--rotate));
+  }
+}
+
 @media (max-width: 900px) {
   .mkt-grid {
     grid-template-columns: repeat(2, 1fr);
