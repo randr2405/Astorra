@@ -3,6 +3,7 @@
   background: #0d0d14;
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
+  position: relative;
 }
 
 .mkt-body {
@@ -11,12 +12,36 @@
   padding: 48px 32px 80px;
 }
 
+/* Generic reveal-on-load utility */
+.mkt-header,
+.mkt-toolbar,
+.mkt-card,
+.mkt-footnote,
+.mkt-cap-banner,
+.mkt-error,
+.mkt-empty {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mkt-header.mkt-in,
+.mkt-toolbar.mkt-in,
+.mkt-card.mkt-in,
+.mkt-footnote.mkt-in,
+.mkt-cap-banner.mkt-in,
+.mkt-error.mkt-in,
+.mkt-empty.mkt-in {
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .mkt-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 24px;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .mkt-eyebrow {
@@ -39,7 +64,26 @@
 .mkt-sub {
   font-size: 14px;
   color: rgba(255, 255, 255, 0.7);
-  margin: 0;
+  margin: 0 0 12px;
+}
+
+.mkt-progress-track {
+  width: 220px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.mkt-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #7c3aed, #3b82f6, #14b8a6);
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mkt-progress-fill--full {
+  background: linear-gradient(90deg, #f59e0b, #f87171);
 }
 
 .mkt-upgrade-btn {
@@ -53,11 +97,17 @@
   font-size: 13.5px;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
 }
 
 .mkt-upgrade-btn:hover {
   border-color: #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  transform: translateY(-1px);
+}
+
+.mkt-upgrade-btn:active {
+  transform: translateY(0);
 }
 
 .mkt-cap-banner {
@@ -86,10 +136,19 @@
   margin-bottom: 16px;
 }
 
+.mkt-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  transition-delay: 0.08s;
+}
+
 .mkt-filters {
   display: flex;
   gap: 8px;
-  margin-bottom: 24px;
   flex-wrap: wrap;
 }
 
@@ -103,13 +162,70 @@
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.mkt-filter-btn:hover {
+  color: #fdfdfe;
+  transform: translateY(-1px);
 }
 
 .mkt-filter-btn--active {
   border-color: #7c3aed;
   color: #fdfdfe;
   background: rgba(124, 58, 237, 0.12);
+}
+
+.mkt-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 220px;
+}
+
+.mkt-search-icon {
+  position: absolute;
+  left: 12px;
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+
+.mkt-search input {
+  width: 100%;
+  padding: 9px 32px 9px 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  color: #e7e9ef;
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.mkt-search input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.mkt-search input:focus {
+  border-color: #3b82f6;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mkt-search-clear {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.mkt-search-clear:hover {
+  color: #fdfdfe;
 }
 
 .mkt-grid {
@@ -126,12 +242,47 @@
   padding: 24px;
   display: flex;
   flex-direction: column;
-  transition: border-color 0.15s ease, transform 0.15s ease;
+  overflow: hidden;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease,
+    opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), translate 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mkt-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(20, 184, 166, 0.08));
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  pointer-events: none;
 }
 
 .mkt-card:hover {
   border-color: #3b82f6;
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+.mkt-card:hover::before {
+  opacity: 1;
+}
+
+.mkt-card--installed {
+  border-color: rgba(20, 184, 166, 0.35);
+}
+
+.mkt-installed-badge {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #14b8a6;
+  background: rgba(20, 184, 166, 0.12);
+  border: 1px solid rgba(20, 184, 166, 0.3);
+  padding: 3px 9px;
+  border-radius: 999px;
 }
 
 .mkt-card-top {
@@ -153,6 +304,11 @@
   font-size: 15px;
   color: #fff;
   background: linear-gradient(135deg, #7c3aed, #3b82f6 55%, #14b8a6);
+  transition: transform 0.2s ease;
+}
+
+.mkt-card:hover .mkt-icon {
+  transform: scale(1.06) rotate(-2deg);
 }
 
 .mkt-category-tag {
@@ -184,6 +340,7 @@
 .mkt-card-actions {
   display: flex;
   gap: 8px;
+  min-height: 36px;
 }
 
 .mkt-install-btn,
@@ -198,17 +355,46 @@
   font-weight: 600;
   font-size: 13px;
   cursor: pointer;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mkt-install-btn:hover,
 .mkt-open-btn:hover {
-  opacity: 0.9;
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.mkt-install-btn:active,
+.mkt-open-btn:active {
+  transform: translateY(0);
 }
 
 .mkt-install-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+  transform: none;
+}
+
+.mkt-install-btn--busy {
+  opacity: 0.85;
+}
+
+.mkt-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: mkt-spin 0.7s linear infinite;
+}
+
+@keyframes mkt-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .mkt-uninstall-btn {
@@ -220,11 +406,90 @@
   font-family: "Inter", sans-serif;
   font-size: 13px;
   cursor: pointer;
-  transition: border-color 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .mkt-uninstall-btn:hover {
   border-color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+}
+
+.mkt-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.75);
+  width: 100%;
+  animation: mkt-fade-in 0.15s ease;
+}
+
+@keyframes mkt-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.mkt-confirm-row span {
+  flex: 1;
+}
+
+.mkt-confirm-yes {
+  border: none;
+  background: #f87171;
+  color: #1a0d0d;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mkt-confirm-no {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.mkt-empty {
+  text-align: center;
+  padding: 64px 24px;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+}
+
+.mkt-empty-icon {
+  width: 42px;
+  height: 42px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Sora", sans-serif;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #3b82f6 55%, #14b8a6);
+}
+
+.mkt-empty h3 {
+  font-family: "Sora", sans-serif;
+  color: #fdfdfe;
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.mkt-empty p {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13.5px;
+  margin: 0 0 14px;
 }
 
 .mkt-footnote {
@@ -235,6 +500,7 @@
   color: rgba(255, 255, 255, 0.7);
   font-size: 13.5px;
   text-align: center;
+  transition-delay: 0.12s;
 }
 
 .mkt-footnote strong {
@@ -245,9 +511,44 @@
   color: #3b82f6;
 }
 
+.mkt-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #17171f;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e7e9ef;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 500;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  animation: mkt-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 50;
+}
+
+.mkt-toast--success {
+  border-color: rgba(20, 184, 166, 0.35);
+}
+
+@keyframes mkt-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
 @media (max-width: 900px) {
   .mkt-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .mkt-search {
+    width: 100%;
   }
 }
 
@@ -258,5 +559,15 @@
   .mkt-body {
     padding-left: 20px;
     padding-right: 20px;
+  }
+  .mkt-header {
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }
