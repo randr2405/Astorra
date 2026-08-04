@@ -27,6 +27,10 @@ function Billing({ business, appUser, onBusinessUpdate }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const pollAttempts = useRef(0);
 
+  const [pendingDowngrade, setPendingDowngrade] = useState(null); // planKey awaiting confirmation
+  const [toast, setToast] = useState(null);
+  const [loaded, setLoaded] = useState(false);
+
   const currentPlan = business?.plan || "free";
   const installed = business?.installed_modules || [];
 
@@ -44,6 +48,17 @@ function Billing({ business, appUser, onBusinessUpdate }) {
   const rawCreditsUsed = business?.ai_credits_used ?? 0;
   const creditsUsed = isPastReset ? 0 : rawCreditsUsed;
   const creditsRemaining = creditsLimit === Infinity ? Infinity : Math.max(creditsLimit - creditsUsed, 0);
+
+  useEffect(() => {
+    const t = setTimeout(() => setLoaded(true), 60);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 2600);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   useEffect(() => {
     if (searchParams.get("payment") !== "success" || !business?.id) return;
@@ -66,6 +81,7 @@ function Billing({ business, appUser, onBusinessUpdate }) {
         if (onBusinessUpdate) onBusinessUpdate(data);
         setPolling(false);
         clearInterval(interval);
+        setToast({ type: "success", text: `You're now on the ${PLAN_DETAILS[data.plan].name} plan` });
         // Clean the query param so refreshing doesn't re-trigger polling.
         setSearchParams({}, { replace: true });
         return;
@@ -99,57 +115,42 @@ function Billing({ business, appUser, onBusinessUpdate }) {
     }
   };
 
-  const handleSwitchPlan = async (planKey) => {
-    if (planKey === currentPlan) return;
-    setError("");
+  const switchToFree = async () => {
+    setSwitchingTo("free");
+    setPendingDowngrade(null);
 
-    const newLimit = getModuleLimit(planKey);
+    if (business.payfast_token) {
+      const { error: cancelError } = await supabase.functions.invoke("payfast-cancel", {
+        body: { business_id: business.id },
+      });
+      if (cancelError) {
+        setSwitchingTo(null);
+        return setError(`Could not cancel your active subscription: ${cancelError.message}`);
+      }
+    }
+
+    const newLimit = getModuleLimit("free");
     const isDowngrade = newLimit < installed.length;
+    const nextModules = isDowngrade ? capModulesToPlan(installed, "free") : installed;
+    const { data, error: updateError } = await supabase
+      .from("businesses")
+      .update({ plan: "free", installed_modules: nextModules })
+      .eq("id", business.id)
+      .select()
+      .single();
 
-    if (isDowngrade) {
-      const excess = installed.length - newLimit;
-      const proceed = window.confirm(
-        `The ${PLAN_DETAILS[planKey].name} plan only includes ${newLimit} modules. ` +
-          `You currently have ${installed.length} installed, so ${excess} will be removed ` +
-          `(your data stays intact — you can reinstall or upgrade later). Continue?`
-      );
-      if (!proceed) return;
+    setSwitchingTo(null);
+
+    if (updateError) {
+      return setError(updateError.message);
     }
 
-    // Free is the only plan with no PayFast step — switch straight away,
-    // and cancel any existing recurring subscription so billing stops.
-    if (planKey === "free") {
-      setSwitchingTo(planKey);
+    if (onBusinessUpdate) onBusinessUpdate(data);
+    setToast({ type: "neutral", text: `Switched to ${PLAN_DETAILS.free.name}` });
+    notify(business.id, appUser?.id, `Plan changed to ${PLAN_DETAILS.free.name}.`);
+  };
 
-      if (business.payfast_token) {
-        const { error: cancelError } = await supabase.functions.invoke("payfast-cancel", {
-          body: { business_id: business.id },
-        });
-        if (cancelError) {
-          setSwitchingTo(null);
-          return setError(`Could not cancel your active subscription: ${cancelError.message}`);
-        }
-      }
-
-      const nextModules = isDowngrade ? capModulesToPlan(installed, planKey) : installed;
-      const { data, error: updateError } = await supabase
-        .from("businesses")
-        .update({ plan: "free", installed_modules: nextModules })
-        .eq("id", business.id)
-        .select()
-        .single();
-
-      setSwitchingTo(null);
-
-      if (updateError) {
-        return setError(updateError.message);
-      }
-
-      if (onBusinessUpdate) onBusinessUpdate(data);
-      notify(business.id, appUser?.id, `Plan changed to ${PLAN_DETAILS.free.name}.`);
-      return;
-    }
-
+  const startPaidCheckout = async (planKey) => {
     // Paid plans go through PayFast. The plan does NOT change here — it
     // only changes once payfast-notify confirms the payment server-side.
     //
@@ -191,21 +192,50 @@ function Billing({ business, appUser, onBusinessUpdate }) {
     }
   };
 
+  const handleSwitchPlan = (planKey) => {
+    if (planKey === currentPlan) return;
+    setError("");
+
+    const newLimit = getModuleLimit(planKey);
+    const isDowngrade = newLimit < installed.length;
+
+    if (isDowngrade) {
+      setPendingDowngrade(planKey);
+      return;
+    }
+
+    if (planKey === "free") {
+      switchToFree();
+    } else {
+      startPaidCheckout(planKey);
+    }
+  };
+
+  const confirmDowngrade = () => {
+    if (pendingDowngrade === "free") {
+      switchToFree();
+    } else if (pendingDowngrade) {
+      startPaidCheckout(pendingDowngrade);
+    }
+  };
+
   return (
     <div className="bill-page">
       <AppNav business={business} />
 
       <div className="bill-body">
-        <p className="bill-eyebrow">Billing</p>
-        <h1 className="bill-heading">Your plan</h1>
-        <p className="bill-sub">
-          Pay for what you use, and grow when you're ready. You're currently on the{" "}
-          <strong>{PLAN_DETAILS[currentPlan].name}</strong> plan with {installed.length} module
-          {installed.length === 1 ? "" : "s"} installed.
-        </p>
+        <div className={loaded ? "bill-in" : ""}>
+          <p className="bill-eyebrow">Billing</p>
+          <h1 className="bill-heading">Your plan</h1>
+          <p className="bill-sub">
+            Pay for what you use, and grow when you're ready. You're currently on the{" "}
+            <strong>{PLAN_DETAILS[currentPlan].name}</strong> plan with {installed.length} module
+            {installed.length === 1 ? "" : "s"} installed.
+          </p>
+        </div>
 
         {creditsLimit > 0 && (
-          <p className="bill-sub" style={{ fontSize: "13px" }}>
+          <p className={`bill-sub bill-credits ${loaded ? "bill-in" : ""}`}>
             {creditsLimit === Infinity ? (
               "Unlimited AI Builder requests this month."
             ) : (
@@ -226,46 +256,41 @@ function Billing({ business, appUser, onBusinessUpdate }) {
         )}
 
         {polling && (
-          <p className="bill-sub" style={{ color: "#14b8a6" }}>
+          <p className="bill-status bill-status--info mkt-in bill-in">
+            <span className="bill-status-dot" />
             Confirming your payment with PayFast — this can take a minute or so...
           </p>
         )}
 
         {pollTimedOut && (
-          <p className="bill-sub" style={{ color: "#f59e0b" }}>
+          <p className="bill-status bill-status--warn bill-in">
             Still waiting to hear back from PayFast about your payment.{" "}
-            <button
-              onClick={handleManualRefresh}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#3b82f6",
-                textDecoration: "underline",
-                cursor: "pointer",
-                padding: 0,
-                font: "inherit",
-              }}
-            >
+            <button className="bill-inline-link" onClick={handleManualRefresh}>
               Check again
             </button>
           </p>
         )}
 
         {business?.subscription_status === "failed" && (
-          <p className="bill-error">
+          <p className="bill-error bill-in">
             Your last payment didn't go through. Please switch your plan again to retry.
           </p>
         )}
 
-        {error && <p className="bill-error">{error}</p>}
+        {error && <p className="bill-error bill-in">{error}</p>}
 
         <div className="bill-grid">
-          {PLANS.map((planKey) => {
+          {PLANS.map((planKey, i) => {
             const details = PLAN_DETAILS[planKey];
             const isCurrent = planKey === currentPlan;
             const isBusy = switchingTo === planKey;
+            const isConfirming = pendingDowngrade === planKey;
             return (
-              <div className={`bill-card ${isCurrent ? "bill-card--current" : ""}`} key={planKey}>
+              <div
+                className={`bill-card ${isCurrent ? "bill-card--current" : ""} ${loaded ? "bill-in" : ""}`}
+                key={planKey}
+                style={{ transitionDelay: loaded ? `${i * 50}ms` : "0ms" }}
+              >
                 {isCurrent && <span className="bill-badge">Current plan</span>}
                 <h3>{details.name}</h3>
                 <div className="bill-amount">
@@ -279,23 +304,59 @@ function Billing({ business, appUser, onBusinessUpdate }) {
                 </p>
                 <p className="bill-ai">{details.ai}</p>
                 <p className="bill-extra">{details.extraModulePrice}</p>
-                <button
-                  className={isCurrent ? "bill-btn bill-btn--disabled" : "bill-btn"}
-                  onClick={() => handleSwitchPlan(planKey)}
-                  disabled={isCurrent || isBusy}
-                >
-                  {isCurrent ? "Current plan" : isBusy ? "Redirecting..." : "Switch plan"}
-                </button>
+
+                {isConfirming ? (
+                  <div className="bill-confirm">
+                    <p>
+                      The {details.name} plan includes {getModuleLimit(planKey)} module
+                      {getModuleLimit(planKey) === 1 ? "" : "s"}. You have {installed.length} installed
+                      — {installed.length - getModuleLimit(planKey)} will be removed (your data stays
+                      intact).
+                    </p>
+                    <div className="bill-confirm-actions">
+                      <button className="bill-confirm-yes" onClick={confirmDowngrade} disabled={isBusy}>
+                        {isBusy ? "Working..." : "Continue"}
+                      </button>
+                      <button
+                        className="bill-confirm-no"
+                        onClick={() => setPendingDowngrade(null)}
+                        disabled={isBusy}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    className={isCurrent ? "bill-btn bill-btn--disabled" : "bill-btn"}
+                    onClick={() => handleSwitchPlan(planKey)}
+                    disabled={isCurrent || isBusy}
+                  >
+                    {isCurrent ? (
+                      "Current plan"
+                    ) : isBusy ? (
+                      <span className="bill-spinner" />
+                    ) : (
+                      "Switch plan"
+                    )}
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
 
-        <div className="bill-footnote">
+        <div className={`bill-footnote ${loaded ? "bill-in" : ""}`}>
           <strong>Need something custom?</strong> For requirements beyond the standard modules,
           Astorra builds fully custom software too — <a href="mailto:info@rragencies.co.za">get in touch</a> to scope it.
         </div>
       </div>
+
+      {toast && (
+        <div className={`bill-toast bill-toast--${toast.type}`}>
+          {toast.type === "success" ? "✓" : "—"} {toast.text}
+        </div>
+      )}
     </div>
   );
 }
