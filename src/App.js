@@ -12,6 +12,7 @@ import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
 import Quotes from "./pages/Quotes";
+import Jobs from "./pages/Jobs";
 import Invoices from "./pages/Invoices";
 import Inventory from "./pages/Inventory";
 import Staff from "./pages/Staff";
@@ -158,6 +159,19 @@ function App() {
               <Navigate to="/onboarding" replace />
             ) : (
               <Quotes business={business} appUser={appUser} />
+            )
+          }
+        />
+
+        <Route
+          path="/dashboard/jobs"
+          element={
+            !user ? (
+              <Navigate to="/auth" replace />
+            ) : !business ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <Jobs business={business} appUser={appUser} />
             )
           }
         />
