@@ -1,12 +1,38 @@
+:root {
+  --navy: #0b0f1a;
+  --navy-raised: #111527;
+  --purple: #7c3aed;
+  --blue: #3b82f6;
+  --teal: #14b8a6;
+  --amber: #f59e0b;
+  --red: #f87171;
+  --border: rgba(255, 255, 255, 0.08);
+  --slate: #6b7280;
+}
+
 .rep-page {
   min-height: 100vh;
-  background: #F3F4F6;
+  background: var(--navy);
+  color: #e7e9ef;
+  font-family: "Inter", sans-serif;
 }
 
 .rep-body {
-  max-width: 1100px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 48px 32px 80px;
+  animation: rep-page-in 0.4s ease both;
+}
+
+@keyframes rep-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .rep-header {
@@ -14,30 +40,32 @@
   align-items: flex-end;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: 20px;
+  margin-bottom: 28px;
 }
 
 .rep-eyebrow {
-  color: #7C3AED;
-  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  margin: 0 0 4px;
+  color: var(--teal);
+  margin: 0 0 10px;
 }
 
 .rep-heading {
-  color: #0B0F1A;
-  font-size: 26px;
-  font-weight: 700;
+  font-family: "Sora", sans-serif;
+  font-size: 28px;
+  font-weight: 600;
+  color: #fdfdfe;
   margin: 0;
 }
 
 .rep-range-toggle {
   display: flex;
   gap: 6px;
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
   border-radius: 10px;
   padding: 4px;
 }
@@ -45,18 +73,23 @@
 .rep-range-btn {
   border: none;
   background: transparent;
-  color: #6B7280;
+  color: var(--slate);
+  font-family: "Inter", sans-serif;
   font-size: 13px;
   font-weight: 600;
-  padding: 6px 12px;
+  padding: 7px 14px;
   border-radius: 7px;
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
 
+.rep-range-btn:hover {
+  color: #e7e9ef;
+}
+
 .rep-range-btn--active {
-  background: #0B0F1A;
-  color: #FFFFFF;
+  background: linear-gradient(135deg, var(--purple), var(--blue) 55%, var(--teal));
+  color: #fff;
 }
 
 /* ---------- Stat cards ---------- */
@@ -65,7 +98,7 @@
   display: grid;
   grid-template-columns: repeat(5, 1fr);
   gap: 14px;
-  margin-bottom: 28px;
+  margin-bottom: 24px;
 }
 
 @media (max-width: 900px) {
@@ -75,28 +108,55 @@
 }
 
 .rep-stat-card {
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px 18px;
+  padding: 16px 20px;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+  animation: rep-fade-up 0.35s ease both;
+}
+
+.rep-stat-card:nth-child(2) { animation-delay: 0.05s; }
+.rep-stat-card:nth-child(3) { animation-delay: 0.1s; }
+.rep-stat-card:nth-child(4) { animation-delay: 0.15s; }
+.rep-stat-card:nth-child(5) { animation-delay: 0.2s; }
+
+.rep-stat-card:hover {
+  border-color: rgba(59, 130, 246, 0.35);
+  transform: translateY(-2px);
 }
 
 .rep-stat-card--warn {
-  border-color: #F5C2A8;
-  background: #FFF8F3;
+  border-color: rgba(248, 113, 113, 0.3);
+  background: rgba(248, 113, 113, 0.05);
 }
 
 .rep-stat-label {
-  color: #6B7280;
-  font-size: 12.5px;
-  margin: 0 0 6px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--slate);
+  font-weight: 600;
+  margin: 0 0 8px;
 }
 
 .rep-stat-value {
-  color: #111827;
-  font-size: 20px;
-  font-weight: 700;
+  font-family: "Sora", sans-serif;
+  font-size: 22px;
+  font-weight: 600;
+  color: #fdfdfe;
   margin: 0;
+}
+
+@keyframes rep-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ---------- Panels ---------- */
@@ -114,10 +174,11 @@
 }
 
 .rep-panel {
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
   border-radius: 14px;
-  padding: 20px 22px 22px;
+  padding: 22px 24px 24px;
+  animation: rep-fade-up 0.3s ease both;
 }
 
 .rep-panel--wide {
@@ -125,20 +186,21 @@
 }
 
 .rep-panel-title {
-  color: #111827;
+  font-family: "Sora", sans-serif;
+  color: #fdfdfe;
   font-size: 15.5px;
-  font-weight: 700;
+  font-weight: 600;
   margin: 0 0 2px;
 }
 
 .rep-panel-sub {
-  color: #6B7280;
+  color: var(--slate);
   font-size: 12.5px;
-  margin: 0 0 16px;
+  margin: 0 0 18px;
 }
 
 .rep-panel-empty {
-  color: #9CA3AF;
+  color: var(--slate);
   font-size: 13.5px;
   padding: 20px 0;
   text-align: center;
@@ -168,18 +230,19 @@
   align-items: flex-end;
   border-radius: 6px;
   overflow: hidden;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .rep-bar-fill {
   width: 100%;
   min-height: 3px;
   border-radius: 6px 6px 0 0;
-  background: linear-gradient(180deg, #7C3AED 0%, #3B82F6 60%, #14B8A6 100%);
+  background: linear-gradient(180deg, var(--purple) 0%, var(--blue) 60%, var(--teal) 100%);
   transition: height 0.4s ease;
 }
 
 .rep-bar-value {
-  color: #111827;
+  color: #e7e9ef;
   font-size: 11px;
   font-weight: 600;
   margin-top: 6px;
@@ -187,7 +250,7 @@
 }
 
 .rep-bar-label {
-  color: #9CA3AF;
+  color: var(--slate);
   font-size: 11.5px;
   margin-top: 2px;
 }
@@ -201,17 +264,17 @@
 }
 
 .rep-linechart-area {
-  fill: rgba(124, 58, 237, 0.08);
+  fill: rgba(124, 58, 237, 0.12);
 }
 
 .rep-linechart-line {
-  stroke: #7C3AED;
+  stroke: var(--purple);
   stroke-width: 2.2;
 }
 
 .rep-linechart-dot {
-  fill: #FFFFFF;
-  stroke: #7C3AED;
+  fill: var(--navy-raised);
+  stroke: var(--blue);
   stroke-width: 2;
 }
 
@@ -219,7 +282,7 @@
   display: flex;
   justify-content: space-between;
   margin-top: 6px;
-  color: #9CA3AF;
+  color: var(--slate);
   font-size: 11.5px;
 }
 
@@ -236,7 +299,7 @@
   align-items: center;
   gap: 12px;
   padding: 10px 0;
-  border-bottom: 1px solid #F3F4F6;
+  border-bottom: 1px solid var(--border);
 }
 
 .rep-top-customer-row:last-child {
@@ -247,8 +310,8 @@
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #F3F4F6;
-  color: #6B7280;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--slate);
   font-size: 12px;
   font-weight: 700;
   display: flex;
@@ -265,7 +328,7 @@
 }
 
 .rep-top-customer-name {
-  color: #111827;
+  color: #fdfdfe;
   font-size: 13.5px;
   font-weight: 600;
   overflow: hidden;
@@ -274,12 +337,12 @@
 }
 
 .rep-top-customer-sub {
-  color: #9CA3AF;
+  color: var(--slate);
   font-size: 11.5px;
 }
 
 .rep-top-customer-total {
-  color: #111827;
+  color: #fdfdfe;
   font-size: 13.5px;
   font-weight: 700;
   flex-shrink: 0;
@@ -301,26 +364,26 @@
 }
 
 .rep-aging-label {
-  color: #6B7280;
+  color: var(--slate);
   font-size: 12.5px;
 }
 
 .rep-aging-track {
   height: 8px;
-  background: #F3F4F6;
+  background: rgba(255, 255, 255, 0.05);
   border-radius: 5px;
   overflow: hidden;
 }
 
 .rep-aging-fill {
   height: 100%;
-  background: linear-gradient(90deg, #F59E0B, #EF4444);
+  background: linear-gradient(90deg, var(--amber), var(--red));
   border-radius: 5px;
   transition: width 0.4s ease;
 }
 
 .rep-aging-value {
-  color: #111827;
+  color: #e7e9ef;
   font-size: 12.5px;
   font-weight: 600;
   text-align: right;
@@ -329,12 +392,13 @@
 /* ---------- Empty / skeleton states ---------- */
 
 .rep-empty {
-  background: #FFFFFF;
-  border: 1px dashed #E5E7EB;
-  border-radius: 14px;
-  padding: 48px 24px;
   text-align: center;
-  color: #6B7280;
+  color: var(--slate);
+  font-size: 14.5px;
+  padding: 60px 20px;
+  border: 1px dashed var(--border);
+  border-radius: 12px;
+  animation: rep-fade-up 0.3s ease both;
 }
 
 .rep-empty p {
@@ -342,8 +406,9 @@
 }
 
 .rep-empty-sub {
-  font-size: 13.5px;
-  color: #9CA3AF;
+  font-size: 13px;
+  opacity: 0.8;
+  color: var(--slate);
 }
 
 .rep-skeleton {
@@ -361,7 +426,12 @@
 .rep-skeleton-card {
   height: 74px;
   border-radius: 12px;
-  background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 37%, #F3F4F6 63%);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.03) 25%,
+    rgba(255, 255, 255, 0.07) 37%,
+    rgba(255, 255, 255, 0.03) 63%
+  );
   background-size: 400% 100%;
   animation: rep-shimmer 1.4s ease infinite;
 }
@@ -369,4 +439,10 @@
 @keyframes rep-shimmer {
   0% { background-position: 100% 50%; }
   100% { background-position: 0% 50%; }
+}
+
+@media (max-width: 700px) {
+  .rep-stats {
+    grid-template-columns: 1fr;
+  }
 }
