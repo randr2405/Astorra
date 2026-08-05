@@ -43,6 +43,7 @@ export const MODULE_CATALOG = [
   { key: "customers", name: "Customers", desc: "One record per customer, feeding everything else", initial: "C", category: "Sales", route: "customers" },
   { key: "quotes", name: "Quotes", desc: "Create and send quotes to customers, ready to convert", initial: "Q", category: "Sales", route: "quotes" },
   { key: "invoices", name: "Invoices", desc: "Convert quotes to invoices, track what's paid", initial: "I", category: "Finance", route: "invoices" },
+  { key: "expenses", name: "Expenses", desc: "Log what you spend, attach receipts, see profit at a glance", initial: "E", category: "Finance", route: "expenses" },
   { key: "inventory", name: "Inventory", desc: "Stock levels that stay accurate on their own", initial: "S", category: "Operations", route: "inventory" },
   { key: "staff", name: "Staff / HR", desc: "Records and basics, without a separate system", initial: "H", category: "HR", route: "staff" },
   { key: "bookings", name: "Bookings", desc: "Scheduling that updates the whole business", initial: "B", category: "Operations", route: "bookings" },
