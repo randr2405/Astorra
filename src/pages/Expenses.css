@@ -91,6 +91,34 @@
   box-shadow: none;
 }
 
+/* Secondary button (e.g. Export) — outline variant sitting next to .exp-add-btn */
+.exp-secondary-btn {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  color: #e7e9ef;
+  border-radius: 10px;
+  padding: 12px 22px;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+.exp-secondary-btn:hover:not(:disabled) {
+  border-color: var(--blue);
+  background: rgba(59, 130, 246, 0.08);
+  transform: translateY(-1px);
+}
+.exp-secondary-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+.exp-secondary-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* Stats strip */
 .exp-stats {
   display: grid;
@@ -199,6 +227,24 @@
   transition: border-color 0.15s ease;
 }
 .exp-select:focus { outline: none; border-color: var(--blue); }
+
+/* Custom date-range inputs, styled to match .exp-select */
+.exp-date-input {
+  cursor: text;
+  min-width: 148px;
+}
+.exp-date-input:focus {
+  outline: none;
+  border-color: var(--blue);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.exp-range-sep {
+  color: var(--slate);
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
 
 .exp-clear-filters {
   background: transparent;
@@ -347,6 +393,20 @@
   border: 1px solid rgba(59, 130, 246, 0.28);
 }
 
+/* Recurring badge — sits next to the category pill in the table */
+.exp-recurring-pill {
+  display: inline-block;
+  font-size: 11.5px;
+  font-weight: 600;
+  border-radius: 999px;
+  padding: 3px 9px;
+  margin-left: 6px;
+  white-space: nowrap;
+  color: #99efe2;
+  background: rgba(20, 184, 166, 0.1);
+  border: 1px solid rgba(20, 184, 166, 0.3);
+}
+
 .exp-actions-cell {
   display: flex;
   gap: 8px;
@@ -455,6 +515,25 @@
   margin: -10px 0 16px;
 }
 
+/* "This expense repeats" checkbox row in the modal */
+.exp-recurring-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #d7dae2;
+  cursor: pointer;
+  margin: -4px 0 16px;
+  user-select: none;
+}
+.exp-recurring-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--purple);
+  cursor: pointer;
+}
+
 .exp-modal-actions {
   display: flex;
   gap: 10px;
@@ -496,4 +575,5 @@
   .exp-table td:nth-child(5) {
     display: none;
   }
+  .exp-date-input { min-width: 0; flex: 1; }
 }
