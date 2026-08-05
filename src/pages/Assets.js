@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../lib/supabaseClient";
 import "./Assets.css";
 
@@ -49,16 +49,7 @@ export default function Assets({ business }) {
 
   const [toast, setToast] = useState(null);
 
-  useEffect(() => {
-    loadAssets();
-    loadStaff();
-  }, [business.id]);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  async function loadAssets() {
+  const loadAssets = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("assets")
@@ -68,16 +59,25 @@ export default function Assets({ business }) {
 
     if (!error) setAssets(data || []);
     setLoading(false);
-  }
+  }, [business.id]);
 
-  async function loadStaff() {
+  const loadStaff = useCallback(async () => {
     const { data } = await supabase
       .from("staff")
       .select("id, full_name")
       .eq("business_id", business.id)
       .order("full_name", { ascending: true });
     setStaffList(data || []);
-  }
+  }, [business.id]);
+
+  useEffect(() => {
+    loadAssets();
+    loadStaff();
+  }, [loadAssets, loadStaff]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   function showToast(message) {
     setToast(message);
