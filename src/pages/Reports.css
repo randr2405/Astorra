@@ -1,0 +1,372 @@
+.rep-page {
+  min-height: 100vh;
+  background: #F3F4F6;
+}
+
+.rep-body {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+.rep-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.rep-eyebrow {
+  color: #7C3AED;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin: 0 0 4px;
+}
+
+.rep-heading {
+  color: #0B0F1A;
+  font-size: 26px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.rep-range-toggle {
+  display: flex;
+  gap: 6px;
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.rep-range-btn {
+  border: none;
+  background: transparent;
+  color: #6B7280;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.rep-range-btn--active {
+  background: #0B0F1A;
+  color: #FFFFFF;
+}
+
+/* ---------- Stat cards ---------- */
+
+.rep-stats {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+@media (max-width: 900px) {
+  .rep-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.rep-stat-card {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+
+.rep-stat-card--warn {
+  border-color: #F5C2A8;
+  background: #FFF8F3;
+}
+
+.rep-stat-label {
+  color: #6B7280;
+  font-size: 12.5px;
+  margin: 0 0 6px;
+}
+
+.rep-stat-value {
+  color: #111827;
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
+
+/* ---------- Panels ---------- */
+
+.rep-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .rep-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rep-panel {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-radius: 14px;
+  padding: 20px 22px 22px;
+}
+
+.rep-panel--wide {
+  grid-column: 1 / -1;
+}
+
+.rep-panel-title {
+  color: #111827;
+  font-size: 15.5px;
+  font-weight: 700;
+  margin: 0 0 2px;
+}
+
+.rep-panel-sub {
+  color: #6B7280;
+  font-size: 12.5px;
+  margin: 0 0 16px;
+}
+
+.rep-panel-empty {
+  color: #9CA3AF;
+  font-size: 13.5px;
+  padding: 20px 0;
+  text-align: center;
+}
+
+/* ---------- Bar chart ---------- */
+
+.rep-barchart {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.rep-bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+
+.rep-bar-track {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.rep-bar-fill {
+  width: 100%;
+  min-height: 3px;
+  border-radius: 6px 6px 0 0;
+  background: linear-gradient(180deg, #7C3AED 0%, #3B82F6 60%, #14B8A6 100%);
+  transition: height 0.4s ease;
+}
+
+.rep-bar-value {
+  color: #111827;
+  font-size: 11px;
+  font-weight: 600;
+  margin-top: 6px;
+  height: 14px;
+}
+
+.rep-bar-label {
+  color: #9CA3AF;
+  font-size: 11.5px;
+  margin-top: 2px;
+}
+
+/* ---------- Line chart ---------- */
+
+.rep-linechart-svg {
+  width: 100%;
+  height: 140px;
+  overflow: visible;
+}
+
+.rep-linechart-area {
+  fill: rgba(124, 58, 237, 0.08);
+}
+
+.rep-linechart-line {
+  stroke: #7C3AED;
+  stroke-width: 2.2;
+}
+
+.rep-linechart-dot {
+  fill: #FFFFFF;
+  stroke: #7C3AED;
+  stroke-width: 2;
+}
+
+.rep-linechart-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  color: #9CA3AF;
+  font-size: 11.5px;
+}
+
+/* ---------- Top customers list ---------- */
+
+.rep-top-customers {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rep-top-customer-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid #F3F4F6;
+}
+
+.rep-top-customer-row:last-child {
+  border-bottom: none;
+}
+
+.rep-top-customer-rank {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #F3F4F6;
+  color: #6B7280;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rep-top-customer-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.rep-top-customer-name {
+  color: #111827;
+  font-size: 13.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rep-top-customer-sub {
+  color: #9CA3AF;
+  font-size: 11.5px;
+}
+
+.rep-top-customer-total {
+  color: #111827;
+  font-size: 13.5px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+/* ---------- Aging list ---------- */
+
+.rep-aging-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.rep-aging-row {
+  display: grid;
+  grid-template-columns: 76px 1fr 90px;
+  align-items: center;
+  gap: 10px;
+}
+
+.rep-aging-label {
+  color: #6B7280;
+  font-size: 12.5px;
+}
+
+.rep-aging-track {
+  height: 8px;
+  background: #F3F4F6;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.rep-aging-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #F59E0B, #EF4444);
+  border-radius: 5px;
+  transition: width 0.4s ease;
+}
+
+.rep-aging-value {
+  color: #111827;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* ---------- Empty / skeleton states ---------- */
+
+.rep-empty {
+  background: #FFFFFF;
+  border: 1px dashed #E5E7EB;
+  border-radius: 14px;
+  padding: 48px 24px;
+  text-align: center;
+  color: #6B7280;
+}
+
+.rep-empty p {
+  margin: 0 0 6px;
+}
+
+.rep-empty-sub {
+  font-size: 13.5px;
+  color: #9CA3AF;
+}
+
+.rep-skeleton {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 14px;
+}
+
+@media (max-width: 900px) {
+  .rep-skeleton {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.rep-skeleton-card {
+  height: 74px;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #F3F4F6 25%, #E5E7EB 37%, #F3F4F6 63%);
+  background-size: 400% 100%;
+  animation: rep-shimmer 1.4s ease infinite;
+}
+
+@keyframes rep-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}

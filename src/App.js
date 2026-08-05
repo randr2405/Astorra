@@ -22,6 +22,7 @@ import Marketplace from "./pages/Marketplace";
 import Billing from "./pages/Billing";
 import Settings from "./pages/Settings";
 import AIBuilder from "./pages/AIBuilder";
+import Reports from "./pages/Reports";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -276,6 +277,13 @@ function App() {
             )
           }
         />
+
+        <Route
+  path="/dashboard/reports"
+  element={
+    !user ? <Navigate to="/auth" replace /> : !business ? <Navigate to="/onboarding" replace /> : <Reports business={business} />
+  }
+/>
 
         <Route
           path="/dashboard/ai-builder"
