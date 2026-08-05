@@ -34,6 +34,11 @@ export const AI_ACCESS = {
 // Core installable modules (MVP scope). Category groupings mirror the
 // marketplace structure described in the brand doc (Sales, HR, Operations,
 // Finance, AI, Communication) so new modules can slot in later.
+//
+// alwaysOn modules are installed on every plan by default, free of charge,
+// and are excluded from the plan's module cap (see capModulesToPlan below).
+// Documents and Reports both use this — neither requires the business to
+// "spend" one of their plan's module slots to have them.
 export const MODULE_CATALOG = [
   { key: "customers", name: "Customers", desc: "One record per customer, feeding everything else", initial: "C", category: "Sales", route: "customers" },
   { key: "quotes", name: "Quotes", desc: "Create and send quotes to customers, ready to convert", initial: "Q", category: "Sales", route: "quotes" },
@@ -41,17 +46,37 @@ export const MODULE_CATALOG = [
   { key: "inventory", name: "Inventory", desc: "Stock levels that stay accurate on their own", initial: "S", category: "Operations", route: "inventory" },
   { key: "staff", name: "Staff / HR", desc: "Records and basics, without a separate system", initial: "H", category: "HR", route: "staff" },
   { key: "bookings", name: "Bookings", desc: "Scheduling that updates the whole business", initial: "B", category: "Operations", route: "bookings" },
-  { key: "reports", name: "Reports", desc: "Revenue, top customers, and overdue tracking at a glance", initial: "R", category: "Operations", route: "reports" },
-  { key: "documents", name: "Documents", desc: "Secure file storage for contracts and paperwork", initial: "D", category: "Operations", route: "documents" },
+  { key: "reports", name: "Reports", desc: "Revenue, top customers, and overdue tracking at a glance", initial: "R", category: "Operations", route: "reports", alwaysOn: true },
+  { key: "documents", name: "Documents", desc: "Secure file storage for contracts and paperwork", initial: "D", category: "Operations", route: "documents", alwaysOn: true },
 ];
 
 export function getModuleLimit(plan) {
   return PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
 }
 
+// Always-on modules (Reports, Documents) never count against the plan's
+// module cap — a business can have every alwaysOn module installed AND
+// still install up to their full plan limit of everything else.
+export function getAlwaysOnModules() {
+  return MODULE_CATALOG.filter((m) => m.alwaysOn);
+}
+
+export function isAlwaysOnModule(key) {
+  return Boolean(getModule(key)?.alwaysOn);
+}
+
+// Caps a list of module keys/objects to the plan's limit, but only counts
+// modules that aren't alwaysOn against that limit. AlwaysOn modules are
+// always included in the returned list, regardless of the cap.
 export function capModulesToPlan(modules, plan) {
   const limit = getModuleLimit(plan);
-  return modules.slice(0, limit);
+
+  const isAlwaysOn = (m) => (typeof m === "string" ? isAlwaysOnModule(m) : Boolean(m.alwaysOn));
+
+  const alwaysOnInList = modules.filter(isAlwaysOn);
+  const capped = modules.filter((m) => !isAlwaysOn(m));
+
+  return [...alwaysOnInList, ...capped.slice(0, limit)];
 }
 
 export function getModule(key) {
