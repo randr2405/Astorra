@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
-import { MODULE_CATALOG, getModuleLimit } from "../lib/plans";
+import { MODULE_CATALOG, getModuleLimit, isAlwaysOnModule } from "../lib/plans";
 import AppNav from "../components/AppNav";
 import "./Marketplace.css";
 
@@ -264,7 +264,13 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
         ) : (
           <div className="mkt-grid">
             {filteredModules.map((mod, i) => {
-              const isInstalled = installed.includes(mod.key);
+              // alwaysOn modules (Reports, Documents) are installed on every
+              // plan by default and never cost a module slot — treat them as
+              // installed even if installed_modules doesn't literally contain
+              // the key (e.g. a business created before an alwaysOn module
+              // existed, or before its onboarding backfill ran).
+              const alwaysOn = isAlwaysOnModule(mod.key);
+              const isInstalled = installed.includes(mod.key) || alwaysOn;
               const isBusy = busyKey === mod.key;
               const confirmingRemove = pendingRemoveKey === mod.key;
               return (
@@ -273,7 +279,11 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
                   key={mod.key}
                   style={{ transitionDelay: loaded ? `${Math.min(i, 9) * 40}ms` : "0ms" }}
                 >
-                  {isInstalled && <span className="mkt-installed-badge">Installed</span>}
+                  {isInstalled && (
+                    <span className="mkt-installed-badge">
+                      {alwaysOn ? "Included" : "Installed"}
+                    </span>
+                  )}
                   <div className="mkt-card-top">
                     <div className="mkt-icon">{mod.initial}</div>
                     <span className="mkt-category-tag">{mod.category}</span>
@@ -282,7 +292,17 @@ function Marketplace({ business, appUser, onBusinessUpdate }) {
                   <p>{mod.desc}</p>
                   <div className="mkt-card-actions">
                     {isInstalled ? (
-                      confirmingRemove ? (
+                      alwaysOn ? (
+                        // Always-on modules ship with every plan and can't be
+                        // removed, so there's nothing to confirm — just let
+                        // the business jump straight in.
+                        <button
+                          className="mkt-open-btn"
+                          onClick={() => navigate(`/dashboard/${mod.route}`)}
+                        >
+                          Open
+                        </button>
+                      ) : confirmingRemove ? (
                         <div className="mkt-confirm-row">
                           <span>Remove module?</span>
                           <button

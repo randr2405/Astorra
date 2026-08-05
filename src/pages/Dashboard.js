@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import AppNav from "../components/AppNav";
-import { MODULE_CATALOG, PLAN_DETAILS, getModuleLimit } from "../lib/plans";
+import { MODULE_CATALOG, PLAN_DETAILS, getModuleLimit, isAlwaysOnModule } from "../lib/plans";
 import "./Dashboard.css";
 
 function Dashboard({ business, appUser }) {
@@ -63,7 +63,10 @@ function Dashboard({ business, appUser }) {
         <p className="dash-section-label">Your modules</p>
         <div className="module-grid">
           {MODULE_CATALOG.map((mod, index) => {
-            const active = installed.includes(mod.key);
+            // alwaysOn modules (Reports, Documents) are active regardless of
+            // whether installed_modules happens to contain the key — they're
+            // not something a business can be missing.
+            const active = installed.includes(mod.key) || isAlwaysOnModule(mod.key);
             return (
               <div
                 className="mod-card"
