@@ -5,7 +5,9 @@ import "./Onboarding.css";
 
 const checklistOptions = [
   { key: "quotes", label: "We send quotes to customers", icon: "📄" },
+  { key: "jobs", label: "We manage jobs or projects for customers", icon: "🛠️" },
   { key: "invoices", label: "We invoice customers", icon: "🧾" },
+  { key: "expenses", label: "We log business expenses", icon: "💳" },
   { key: "bookings", label: "We manage bookings or scheduling", icon: "📅" },
   { key: "stock", label: "We track stock or inventory", icon: "📦" },
   { key: "staff", label: "We manage staff records", icon: "🧑‍🤝‍🧑" },
@@ -21,9 +23,15 @@ function mapAnswersToModules(answers) {
     modules.add("quotes");
     modules.add("customers");
   }
+  if (answers.jobs) {
+    modules.add("jobs");
+  }
   if (answers.invoices) {
     modules.add("invoices");
     modules.add("customers");
+  }
+  if (answers.expenses) {
+    modules.add("expenses");
   }
   if (answers.bookings) {
     modules.add("bookings");
@@ -50,7 +58,9 @@ function Onboarding({ firebaseUser, onComplete }) {
   const [teamSize, setTeamSize] = useState("");
   const [answers, setAnswers] = useState({
     quotes: false,
+    jobs: false,
     invoices: false,
+    expenses: false,
     bookings: false,
     stock: false,
     staff: false,
