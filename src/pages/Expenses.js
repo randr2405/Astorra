@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import AppNav from "../components/AppNav";
 import "./Expenses.css";
@@ -17,6 +18,13 @@ const CATEGORIES = [
 
 const CATEGORY_LABELS = Object.fromEntries(CATEGORIES.map((c) => [c.key, c.label]));
 
+const RANGE_OPTIONS = [
+  { key: "all", label: "All time" },
+  { key: "this_month", label: "This month" },
+  { key: "last_month", label: "Last month" },
+  { key: "custom", label: "Custom range" },
+];
+
 const emptyForm = {
   id: null,
   category: "general",
@@ -27,6 +35,8 @@ const emptyForm = {
   vat_amount: "",
   expense_date: new Date().toISOString().slice(0, 10),
   receipt_path: null,
+  is_recurring: false,
+  recurring_frequency: "monthly",
 };
 
 function formatDate(dateStr) {
@@ -38,6 +48,26 @@ function formatDate(dateStr) {
   });
 }
 
+// Returns [start, end] (inclusive, YYYY-MM-DD strings) for a given range key.
+function resolveRangeBounds(rangeKey, customStart, customEnd) {
+  const now = new Date();
+
+  if (rangeKey === "this_month") {
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+  }
+  if (rangeKey === "last_month") {
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const end = new Date(now.getFullYear(), now.getMonth(), 0);
+    return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+  }
+  if (rangeKey === "custom") {
+    return [customStart || null, customEnd || null];
+  }
+  return [null, null]; // all time
+}
+
 function Expenses({ business }) {
   const [expenses, setExpenses] = useState([]);
   const [paidInvoicesTotal, setPaidInvoicesTotal] = useState(0);
@@ -45,6 +75,10 @@ function Expenses({ business }) {
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [sortBy, setSortBy] = useState("date_desc");
+
+  const [rangeKey, setRangeKey] = useState("all");
+  const [customStart, setCustomStart] = useState("");
+  const [customEnd, setCustomEnd] = useState("");
 
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
@@ -80,10 +114,31 @@ function Expenses({ business }) {
     fetchAll();
   }, [fetchAll]);
 
-  // ---------- Stats ----------
+  // ---------- Date range bounds ----------
+  const [rangeStart, rangeEnd] = useMemo(
+    () => resolveRangeBounds(rangeKey, customStart, customEnd),
+    [rangeKey, customStart, customEnd]
+  );
+
+  const inRange = useCallback(
+    (dateStr) => {
+      if (!dateStr) return rangeKey === "all";
+      if (rangeStart && dateStr < rangeStart) return false;
+      if (rangeEnd && dateStr > rangeEnd) return false;
+      return true;
+    },
+    [rangeStart, rangeEnd, rangeKey]
+  );
+
+  // ---------- Stats (respect the date range, not search/category) ----------
+  const rangedExpenses = useMemo(
+    () => expenses.filter((e) => inRange(e.expense_date)),
+    [expenses, inRange]
+  );
+
   const stats = useMemo(() => {
-    const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-    const totalVat = expenses.reduce((sum, e) => sum + Number(e.vat_amount || 0), 0);
+    const totalExpenses = rangedExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    const totalVat = rangedExpenses.reduce((sum, e) => sum + Number(e.vat_amount || 0), 0);
     const netProfit = paidInvoicesTotal - totalExpenses;
     const thisMonthKey = new Date().toISOString().slice(0, 7);
     const thisMonthExpenses = expenses
@@ -91,11 +146,11 @@ function Expenses({ business }) {
       .reduce((sum, e) => sum + Number(e.amount || 0), 0);
 
     return { totalExpenses, totalVat, netProfit, thisMonthExpenses };
-  }, [expenses, paidInvoicesTotal]);
+  }, [rangedExpenses, expenses, paidInvoicesTotal]);
 
-  // ---------- Filter + sort ----------
+  // ---------- Filter + sort (search, category, and date range together) ----------
   const visibleExpenses = useMemo(() => {
-    let list = [...expenses];
+    let list = rangedExpenses.slice();
 
     if (categoryFilter !== "all") {
       list = list.filter((e) => e.category === categoryFilter);
@@ -125,7 +180,7 @@ function Expenses({ business }) {
     }
 
     return list;
-  }, [expenses, categoryFilter, search, sortBy]);
+  }, [rangedExpenses, categoryFilter, search, sortBy]);
 
   // ---------- Modal handlers ----------
   const openAddModal = () => {
@@ -147,6 +202,32 @@ function Expenses({ business }) {
       vat_amount: expense.vat_amount ?? "",
       expense_date: expense.expense_date || new Date().toISOString().slice(0, 10),
       receipt_path: expense.receipt_path || null,
+      is_recurring: expense.is_recurring || false,
+      recurring_frequency: expense.recurring_frequency || "monthly",
+    });
+    setReceiptFile(null);
+    setError("");
+    setModalOpen(true);
+  };
+
+  // Duplicate: opens the Add form pre-filled from an existing expense, but
+  // as a new record (no id, no receipt carried over, today's date, and
+  // never carries the recurring flag — duplicating a recurring template
+  // shouldn't silently create a second auto-generator).
+  const openDuplicateModal = (expense) => {
+    const isKnownCategory = CATEGORIES.some((c) => c.key === expense.category);
+    setForm({
+      id: null,
+      category: isKnownCategory ? expense.category : "other",
+      customCategory: isKnownCategory ? "" : expense.category,
+      vendor: expense.vendor || "",
+      description: expense.description || "",
+      amount: expense.amount ?? "",
+      vat_amount: expense.vat_amount ?? "",
+      expense_date: new Date().toISOString().slice(0, 10),
+      receipt_path: null,
+      is_recurring: false,
+      recurring_frequency: "monthly",
     });
     setReceiptFile(null);
     setError("");
@@ -191,6 +272,18 @@ function Expenses({ business }) {
         receiptPath = path;
       }
 
+      // recurring_next_run is the day after this expense's date, on the
+      // chosen cadence — the daily cron job picks it up once that date
+      // arrives and pushes it forward again from there.
+      const nextRun = form.is_recurring
+        ? (() => {
+            const d = new Date(form.expense_date + "T00:00:00");
+            if (form.recurring_frequency === "weekly") d.setDate(d.getDate() + 7);
+            else d.setMonth(d.getMonth() + 1);
+            return d.toISOString().slice(0, 10);
+          })()
+        : null;
+
       const payload = {
         business_id: business.id,
         category: resolvedCategory,
@@ -200,6 +293,9 @@ function Expenses({ business }) {
         vat_amount: form.vat_amount ? Number(form.vat_amount) : 0,
         expense_date: form.expense_date,
         receipt_path: receiptPath,
+        is_recurring: form.is_recurring,
+        recurring_frequency: form.is_recurring ? form.recurring_frequency : null,
+        recurring_next_run: nextRun,
       };
 
       if (form.id) {
@@ -277,12 +373,42 @@ function Expenses({ business }) {
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
+  const exportCsv = () => {
+    const rows = visibleExpenses.map((e) => ({
+      Date: e.expense_date || "",
+      Category: CATEGORY_LABELS[e.category] || e.category,
+      Vendor: e.vendor || "",
+      Description: e.description || "",
+      Amount: Number(e.amount || 0),
+      VAT: Number(e.vat_amount || 0),
+      Recurring: e.is_recurring ? `Yes (${e.recurring_frequency})` : "No",
+      "Has receipt": e.receipt_path ? "Yes" : "No",
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet["!cols"] = [
+      { wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 30 },
+      { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 12 },
+    ];
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Expenses");
+
+    const rangeLabel = RANGE_OPTIONS.find((r) => r.key === rangeKey)?.label.replace(/\s+/g, "-") || "all-time";
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    XLSX.writeFile(workbook, `expenses-${rangeLabel}-${dateStamp}.xlsx`);
+  };
+
   const clearFilters = () => {
     setSearch("");
     setCategoryFilter("all");
+    setRangeKey("all");
+    setCustomStart("");
+    setCustomEnd("");
   };
 
-  const hasActiveFilters = search.trim() !== "" || categoryFilter !== "all";
+  const hasActiveFilters =
+    search.trim() !== "" || categoryFilter !== "all" || rangeKey !== "all";
 
   return (
     <div className="exp-page">
@@ -295,6 +421,9 @@ function Expenses({ business }) {
             <h1 className="exp-heading">What you're spending</h1>
           </div>
           <div className="exp-header-actions">
+            <button className="exp-secondary-btn" onClick={exportCsv} disabled={visibleExpenses.length === 0}>
+              Export
+            </button>
             <button className="exp-add-btn" onClick={openAddModal}>
               + Add expense
             </button>
@@ -307,7 +436,9 @@ function Expenses({ business }) {
             <p className="exp-stat-value">{currency.format(paidInvoicesTotal)}</p>
           </div>
           <div className="exp-stat-card">
-            <p className="exp-stat-label">Total expenses</p>
+            <p className="exp-stat-label">
+              {rangeKey === "all" ? "Total expenses" : "Expenses (selected range)"}
+            </p>
             <p className="exp-stat-value">{currency.format(stats.totalExpenses)}</p>
           </div>
           <div className={`exp-stat-card ${stats.netProfit < 0 ? "exp-stat-card--warn" : "exp-stat-card--positive"}`}>
@@ -343,6 +474,32 @@ function Expenses({ business }) {
             ))}
             <option value="other">Other</option>
           </select>
+
+          <select className="exp-select" value={rangeKey} onChange={(e) => setRangeKey(e.target.value)}>
+            {RANGE_OPTIONS.map((r) => (
+              <option key={r.key} value={r.key}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+
+          {rangeKey === "custom" && (
+            <>
+              <input
+                className="exp-select exp-date-input"
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+              />
+              <span className="exp-range-sep">to</span>
+              <input
+                className="exp-select exp-date-input"
+                type="date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+              />
+            </>
+          )}
 
           <select className="exp-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
             <option value="date_desc">Newest first</option>
@@ -383,7 +540,7 @@ function Expenses({ business }) {
             <p className="exp-empty-sub">
               {expenses.length === 0
                 ? "Add your first expense to start tracking what you spend."
-                : "Try adjusting your search or category filter."}
+                : "Try adjusting your search, category, or date range."}
             </p>
           </div>
         ) : (
@@ -422,6 +579,11 @@ function Expenses({ business }) {
                       <span className="exp-category-pill">
                         {CATEGORY_LABELS[e.category] || e.category}
                       </span>
+                      {e.is_recurring && (
+                        <span className="exp-recurring-pill" title={`Repeats ${e.recurring_frequency}`}>
+                          ↻ {e.recurring_frequency === "weekly" ? "Weekly" : "Monthly"}
+                        </span>
+                      )}
                     </td>
                     <td className="exp-muted">{e.vendor || "—"}</td>
                     <td className="exp-muted">{e.description || "—"}</td>
@@ -436,6 +598,9 @@ function Expenses({ business }) {
                       )}
                     </td>
                     <td className="exp-actions-cell">
+                      <button className="exp-action-btn" onClick={() => openDuplicateModal(e)}>
+                        Duplicate
+                      </button>
                       <button className="exp-action-btn" onClick={() => openEditModal(e)}>
                         Edit
                       </button>
@@ -543,6 +708,29 @@ function Expenses({ business }) {
             />
             {form.receipt_path && !receiptFile && (
               <p className="exp-existing-receipt">A receipt is already attached. Choose a new file to replace it.</p>
+            )}
+
+            <label className="exp-recurring-toggle">
+              <input
+                type="checkbox"
+                checked={form.is_recurring}
+                onChange={(e) => setForm({ ...form, is_recurring: e.target.checked })}
+              />
+              <span>This expense repeats</span>
+            </label>
+
+            {form.is_recurring && (
+              <>
+                <label className="exp-label">Repeats</label>
+                <select
+                  className="exp-input exp-input--select"
+                  value={form.recurring_frequency}
+                  onChange={(e) => setForm({ ...form, recurring_frequency: e.target.value })}
+                >
+                  <option value="monthly">Monthly</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </>
             )}
 
             <div className="exp-modal-actions">
