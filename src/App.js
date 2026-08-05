@@ -15,6 +15,7 @@ import Quotes from "./pages/Quotes";
 import Jobs from "./pages/Jobs";
 import Invoices from "./pages/Invoices";
 import Inventory from "./pages/Inventory";
+import Assets from "./pages/Assets";
 import Staff from "./pages/Staff";
 import Bookings from "./pages/Bookings";
 import Documents from "./pages/Documents";
@@ -211,6 +212,19 @@ function App() {
               <Navigate to="/onboarding" replace />
             ) : (
               <Inventory business={business} appUser={appUser} />
+            )
+          }
+        />
+
+        <Route
+          path="/dashboard/assets"
+          element={
+            !user ? (
+              <Navigate to="/auth" replace />
+            ) : !business ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <Assets business={business} appUser={appUser} />
             )
           }
         />
