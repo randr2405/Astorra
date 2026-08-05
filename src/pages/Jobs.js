@@ -9,6 +9,7 @@ const STATUS_OPTIONS = [
   { value: "completed", label: "Completed" },
   { value: "invoiced", label: "Invoiced" },
   { value: "cancelled", label: "Cancelled" },
+  { value: "overdue", label: "Overdue" },
 ];
 
 const EMPTY_FORM = {
@@ -49,6 +50,7 @@ export default function Jobs({ business, appUser }) {
 
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [toast, setToast] = useState(null);
+  const [dragIndex, setDragIndex] = useState(null);
 
   const showToast = (message) => {
     setToast(message);
@@ -130,6 +132,23 @@ export default function Jobs({ business, appUser }) {
   const removeTaskRow = (idx) => {
     setTasks((t) => t.filter((_, i) => i !== idx));
   };
+
+  // Drag-to-reorder: live-reorders `tasks` as the dragged row passes over
+  // another row. sort_order is derived from array index on save, so no
+  // separate reorder step is needed there.
+  const handleTaskDragStart = (idx) => setDragIndex(idx);
+  const handleTaskDragOver = (e, idx) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === idx) return;
+    setTasks((t) => {
+      const copy = [...t];
+      const [moved] = copy.splice(dragIndex, 1);
+      copy.splice(idx, 0, moved);
+      return copy;
+    });
+    setDragIndex(idx);
+  };
+  const handleTaskDragEnd = () => setDragIndex(null);
 
   const handleSave = async () => {
     if (!form.title.trim()) {
@@ -486,7 +505,21 @@ export default function Jobs({ business, appUser }) {
               <button className="job-add-row-btn" onClick={addTaskRow}>+ Add task</button>
             </div>
             {tasks.map((t, idx) => (
-              <div key={t.id} className={`job-task-row ${t.is_done ? "job-task-row--done" : ""}`}>
+              <div
+                key={t.id}
+                className={`job-task-row ${t.is_done ? "job-task-row--done" : ""} ${dragIndex === idx ? "job-task-row--dragging" : ""}`}
+                draggable
+                onDragStart={() => handleTaskDragStart(idx)}
+                onDragOver={(e) => handleTaskDragOver(e, idx)}
+                onDragEnd={handleTaskDragEnd}
+              >
+                <span className="job-task-drag-handle" title="Drag to reorder">
+                  <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
+                    <circle cx="2" cy="2" r="1.5" /><circle cx="8" cy="2" r="1.5" />
+                    <circle cx="2" cy="8" r="1.5" /><circle cx="8" cy="8" r="1.5" />
+                    <circle cx="2" cy="14" r="1.5" /><circle cx="8" cy="14" r="1.5" />
+                  </svg>
+                </span>
                 <input
                   type="checkbox"
                   className="job-task-checkbox"

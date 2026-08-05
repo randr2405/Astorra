@@ -276,6 +276,7 @@
 .job-status--completed { background: rgba(20, 184, 166, 0.16); color: #2dd4bf; }
 .job-status--invoiced { background: rgba(124, 58, 237, 0.18); color: #c4b5fd; }
 .job-status--cancelled { background: rgba(248, 113, 113, 0.16); color: #f87171; }
+.job-status--overdue { background: rgba(248, 113, 113, 0.22); color: #fca5a5; font-weight: 700; }
 
 .job-actions-cell { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .job-action-btn {
@@ -449,11 +450,12 @@
 /* Task checklist rows within the modal */
 .job-task-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto;
   gap: 10px;
   align-items: center;
   margin-bottom: 10px;
   animation: job-fade-in 0.15s ease;
+  transition: opacity 0.15s ease;
 }
 .job-task-row .job-input { margin-bottom: 0; }
 .job-task-checkbox {
@@ -465,6 +467,19 @@
 .job-task-row--done .job-input {
   text-decoration: line-through;
   color: var(--slate);
+}
+.job-task-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  color: var(--slate);
+  cursor: grab;
+  touch-action: none;
+}
+.job-task-drag-handle:active { cursor: grabbing; }
+.job-task-row--dragging {
+  opacity: 0.4;
 }
 .job-remove-row-btn {
   background: transparent;
@@ -554,7 +569,7 @@
   .job-table th:nth-child(2),
   .job-table td:nth-child(2) { display: none; }
   .job-row-2 { grid-template-columns: 1fr; }
-  .job-task-row { grid-template-columns: auto 1fr auto; }
+  .job-task-row { grid-template-columns: auto auto 1fr auto; }
   .job-toolbar { flex-direction: column; align-items: stretch; }
   .job-toolbar-right { flex-direction: column; align-items: stretch; }
   .job-search { min-width: 0; }
