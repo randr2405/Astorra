@@ -8,6 +8,8 @@ import CustomCursor from "./components/CustomCursor";
 import Landing from "./pages/Landing";
 import Auth from "./pages/Auth";
 import PayInvoice from "./pages/PayInvoice";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
@@ -101,6 +103,10 @@ function App() {
             the business's customer, not an Astorra account holder. No
             Firebase/Supabase auth check here, same tier as Landing/Auth. */}
         <Route path="/pay/:token" element={<PayInvoice />} />
+
+        {/* Public, unauthenticated legal pages — same tier as Landing/Auth. */}
+        <Route path="/privacy" element={<Privacy />} />
+        <Route path="/terms" element={<Terms />} />
 
         <Route
           path="/auth"
