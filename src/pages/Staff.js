@@ -11,7 +11,18 @@ const STATUS_OPTIONS = [
   { value: "terminated", label: "Terminated" },
 ];
 
+const EMPLOYMENT_TYPE_OPTIONS = [
+  { value: "salaried", label: "Salaried" },
+  { value: "hourly", label: "Hourly" },
+];
+
+const PAY_FREQUENCY_OPTIONS = [
+  { value: "monthly", label: "Monthly" },
+  { value: "weekly", label: "Weekly" },
+];
+
 const STATUS_LABEL = Object.fromEntries(STATUS_OPTIONS.map((s) => [s.value, s.label]));
+const EMPLOYMENT_TYPE_LABEL = Object.fromEntries(EMPLOYMENT_TYPE_OPTIONS.map((s) => [s.value, s.label]));
 const UNASSIGNED = "Unassigned";
 
 function formatTenure(startDate) {
@@ -39,6 +50,12 @@ function isNewHire(startDate) {
   return start.getFullYear() === now.getFullYear() && start.getMonth() === now.getMonth();
 }
 
+function formatPayRate(member) {
+  if (member.pay_rate === null || member.pay_rate === undefined || member.pay_rate === "") return null;
+  const amount = `R${Number(member.pay_rate).toFixed(2)}`;
+  return member.employment_type === "hourly" ? `${amount}/hr` : `${amount} / ${member.pay_frequency || "monthly"}`;
+}
+
 function Staff({ business, appUser }) {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -55,6 +72,10 @@ function Staff({ business, appUser }) {
     start_date: "",
     emergency_contact_name: "",
     emergency_contact_phone: "",
+    employment_type: "salaried",
+    pay_rate: "",
+    pay_frequency: "monthly",
+    tax_number: "",
   });
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
@@ -98,6 +119,10 @@ function Staff({ business, appUser }) {
       start_date: "",
       emergency_contact_name: "",
       emergency_contact_phone: "",
+      employment_type: "salaried",
+      pay_rate: "",
+      pay_frequency: "monthly",
+      tax_number: "",
     });
     setError("");
     setModalOpen(true);
@@ -116,6 +141,10 @@ function Staff({ business, appUser }) {
       start_date: member.start_date || "",
       emergency_contact_name: member.emergency_contact_name || "",
       emergency_contact_phone: member.emergency_contact_phone || "",
+      employment_type: member.employment_type || "salaried",
+      pay_rate: member.pay_rate === null || member.pay_rate === undefined ? "" : String(member.pay_rate),
+      pay_frequency: member.pay_frequency || "monthly",
+      tax_number: member.tax_number || "",
     });
     setError("");
     setModalOpen(true);
@@ -131,6 +160,9 @@ function Staff({ business, appUser }) {
     setError("");
 
     if (!form.full_name.trim()) return setError("Enter a full name.");
+    if (form.pay_rate !== "" && (isNaN(Number(form.pay_rate)) || Number(form.pay_rate) < 0)) {
+      return setError("Pay rate must be a positive number.");
+    }
 
     setSaving(true);
 
@@ -145,6 +177,10 @@ function Staff({ business, appUser }) {
       start_date: form.start_date || null,
       emergency_contact_name: form.emergency_contact_name.trim() || null,
       emergency_contact_phone: form.emergency_contact_phone.trim() || null,
+      employment_type: form.employment_type || "salaried",
+      pay_rate: form.pay_rate === "" ? null : Number(form.pay_rate),
+      pay_frequency: form.pay_frequency || "monthly",
+      tax_number: form.tax_number.trim() || null,
     };
 
     if (editingStaff) {
@@ -336,6 +372,10 @@ function Staff({ business, appUser }) {
       "Start date": m.start_date || "",
       "Emergency contact": m.emergency_contact_name || "",
       "Emergency phone": m.emergency_contact_phone || "",
+      "Employment type": EMPLOYMENT_TYPE_LABEL[m.employment_type || "salaried"],
+      "Pay rate": m.pay_rate ?? "",
+      "Pay frequency": m.pay_frequency || "",
+      "Tax number": m.tax_number || "",
     }));
     const worksheet = XLSX.utils.json_to_sheet(data);
     const workbook = XLSX.utils.book_new();
@@ -519,6 +559,7 @@ function Staff({ business, appUser }) {
                   </th>
                   <th>Department</th>
                   <th>Status</th>
+                  <th>Pay rate</th>
                   <th>Email</th>
                   <th>Phone</th>
                   <th className="staff-th-sortable" onClick={() => toggleSort("start_date")}>
@@ -532,6 +573,7 @@ function Staff({ business, appUser }) {
                 {filteredStaff.map((m, idx) => {
                   const status = m.employment_status || "active";
                   const tenure = formatTenure(m.start_date);
+                  const payRate = formatPayRate(m);
                   return (
                     <tr
                       key={m.id}
@@ -559,6 +601,7 @@ function Staff({ business, appUser }) {
                           {STATUS_LABEL[status]}
                         </span>
                       </td>
+                      <td className={payRate ? "" : "staff-muted"}>{payRate || "Not set"}</td>
                       <td className={m.email ? "" : "staff-muted"}>
                         {m.email ? (
                           <a className="staff-link" href={`mailto:${m.email}`}>
@@ -717,6 +760,72 @@ function Staff({ business, appUser }) {
                     placeholder="081 234 5678"
                     value={form.emergency_contact_phone}
                     onChange={(e) => setForm({ ...form, emergency_contact_phone: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="staff-section-divider">
+                <span>Payroll</span>
+              </div>
+              <p className="staff-section-hint">
+                Set a pay rate to include this person in Payroll pay runs. Leave blank if they
+                aren't paid through Payroll.
+              </p>
+
+              <div className="staff-input-row">
+                <div>
+                  <label className="staff-label">Employment type</label>
+                  <select
+                    className="staff-input staff-input--select"
+                    value={form.employment_type}
+                    onChange={(e) => setForm({ ...form, employment_type: e.target.value })}
+                  >
+                    {EMPLOYMENT_TYPE_OPTIONS.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="staff-label">
+                    Pay rate {form.employment_type === "hourly" ? "(per hour)" : `(per ${form.pay_frequency})`}
+                  </label>
+                  <input
+                    className="staff-input"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="e.g. 12500.00"
+                    value={form.pay_rate}
+                    onChange={(e) => setForm({ ...form, pay_rate: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="staff-input-row">
+                <div>
+                  <label className="staff-label">Pay frequency</label>
+                  <select
+                    className="staff-input staff-input--select"
+                    value={form.pay_frequency}
+                    onChange={(e) => setForm({ ...form, pay_frequency: e.target.value })}
+                    disabled={form.employment_type === "hourly"}
+                  >
+                    {PAY_FREQUENCY_OPTIONS.map((s) => (
+                      <option key={s.value} value={s.value}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="staff-label">Tax number</label>
+                  <input
+                    className="staff-input"
+                    placeholder="SARS income tax ref (optional)"
+                    value={form.tax_number}
+                    onChange={(e) => setForm({ ...form, tax_number: e.target.value })}
                   />
                 </div>
               </div>
