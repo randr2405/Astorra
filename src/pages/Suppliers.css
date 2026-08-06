@@ -243,7 +243,7 @@
   background: rgba(255, 255, 255, 0.05);
 }
 
-/* Status filter pills (Assets-style) */
+/* Status filter pills */
 .sup-filters {
   display: flex;
   gap: 8px;
@@ -593,6 +593,11 @@
 .sup-line-item-row .sup-input {
   margin-bottom: 0;
 }
+.sup-line-desc,
+.sup-line-qty,
+.sup-line-cost {
+  min-width: 0;
+}
 .sup-line-remove {
   background: transparent;
   border: 1px solid var(--border);
@@ -662,6 +667,36 @@
 .sup-cancel-btn:hover {
   border-color: var(--blue);
 }
+
+/* Secondary action button (Download PDF, Reorder) */
+.sup-secondary-btn {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  color: #e7e9ef;
+  border-radius: 10px;
+  padding: 12px 22px;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+.sup-secondary-btn:hover:not(:disabled) {
+  border-color: var(--teal);
+  background: rgba(20, 184, 166, 0.08);
+}
+.sup-secondary-btn:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.sup-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .sup-error {
   color: #f87171;
   font-size: 13.5px;
@@ -823,9 +858,14 @@
   display: flex;
   gap: 10px;
   margin-top: 8px;
+  margin-bottom: 12px;
+}
+.sup-drawer-actions:last-child {
+  margin-bottom: 0;
 }
 .sup-drawer-actions .sup-add-btn,
-.sup-drawer-actions .sup-cancel-btn {
+.sup-drawer-actions .sup-cancel-btn,
+.sup-drawer-actions .sup-secondary-btn {
   flex: 1;
 }
 

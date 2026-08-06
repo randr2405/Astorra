@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../lib/supabaseClient";
+import jsPDF from "jspdf";
 import "./Suppliers.css";
 
 const PO_STATUS_OPTIONS = ["draft", "ordered", "partially_received", "received", "cancelled", "overdue"];
@@ -50,6 +51,8 @@ export default function Suppliers({ business }) {
   const [selectedPoLines, setSelectedPoLines] = useState([]);
   const [poDetailLoading, setPoDetailLoading] = useState(false);
   const [receiving, setReceiving] = useState(false);
+  const [loggingExpense, setLoggingExpense] = useState(false);
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const [toast, setToast] = useState(null);
 
@@ -230,6 +233,27 @@ export default function Suppliers({ business }) {
     setShowPoModal(true);
   }
 
+  // Pre-fills the PO form from an already-received order's supplier +
+  // line items, for repeat stock orders. Closes the detail drawer so
+  // the create modal is the only thing on screen.
+  function openReorder(po, lines) {
+    setPoForm({
+      supplier_id: po.supplier_id || "",
+      expected_date: "",
+      notes: "",
+      line_items: lines.length
+        ? lines.map((l) => ({
+            description: l.description,
+            quantity_ordered: String(l.quantity_ordered),
+            unit_cost: String(l.unit_cost),
+          }))
+        : [{ description: "", quantity_ordered: "1", unit_cost: "" }],
+    });
+    setPoFormError("");
+    setSelectedPo(null);
+    setShowPoModal(true);
+  }
+
   function updateLineItem(index, field, value) {
     setPoForm((prev) => {
       const line_items = [...prev.line_items];
@@ -401,9 +425,131 @@ export default function Suppliers({ business }) {
 
     if (!error) {
       showToast("Marked as received");
-      setSelectedPo({ ...selectedPo, status: "received" });
+      const updated = { ...selectedPo, status: "received" };
+      setSelectedPo(updated);
       loadOrders();
-      openPoDetail({ ...selectedPo, status: "received" });
+      openPoDetail(updated);
+    }
+  }
+
+  // Logs a received PO to Expenses (category "supplies", vendor = the
+  // supplier's name) and stamps purchase_orders.expense_id so it can't
+  // be logged twice. Mirrors the shape expenses already expects.
+  async function handleLogToExpenses() {
+    if (!selectedPo || selectedPo.expense_id) return;
+    setLoggingExpense(true);
+
+    const supplierLabel = selectedPo.suppliers?.name || supplierName(selectedPo.supplier_id);
+
+    const { data: expense, error: expenseError } = await supabase
+      .from("expenses")
+      .insert({
+        business_id: business.id,
+        category: "supplies",
+        vendor: supplierLabel,
+        description: `Purchase order ${selectedPo.po_number}`,
+        amount: selectedPo.total,
+        expense_date: new Date().toISOString().slice(0, 10),
+      })
+      .select()
+      .single();
+
+    if (expenseError) {
+      setLoggingExpense(false);
+      showToast(expenseError.message);
+      return;
+    }
+
+    const { error: poError } = await supabase
+      .from("purchase_orders")
+      .update({ expense_id: expense.id })
+      .eq("id", selectedPo.id);
+
+    setLoggingExpense(false);
+
+    if (poError) {
+      showToast(poError.message);
+      return;
+    }
+
+    showToast("Logged to Expenses");
+    setSelectedPo({ ...selectedPo, expense_id: expense.id });
+    loadOrders();
+  }
+
+  function handleDownloadPdf() {
+    if (!selectedPo) return;
+    setExportingPdf(true);
+
+    try {
+      const supplierLabel = selectedPo.suppliers?.name || supplierName(selectedPo.supplier_id);
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      const marginX = 48;
+      let y = 56;
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(20);
+      doc.text(business.name || "Purchase Order", marginX, y);
+
+      doc.setFontSize(11);
+      doc.setFont("helvetica", "normal");
+      y += 26;
+      doc.text(`Purchase Order ${selectedPo.po_number}`, marginX, y);
+
+      y += 34;
+      doc.setFont("helvetica", "bold");
+      doc.text("Supplier", marginX, y);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Status: ${PO_STATUS_LABEL[selectedPo.status] || selectedPo.status}`, 340, y);
+
+      y += 16;
+      doc.text(supplierLabel, marginX, y);
+      doc.text(`Expected: ${selectedPo.expected_date || "—"}`, 340, y);
+
+      y += 34;
+      doc.setFont("helvetica", "bold");
+      doc.text("Description", marginX, y);
+      doc.text("Qty", 330, y, { align: "right" });
+      doc.text("Unit cost", 420, y, { align: "right" });
+      doc.text("Line total", 520, y, { align: "right" });
+      doc.setLineWidth(0.5);
+      doc.line(marginX, y + 6, 520, y + 6);
+
+      doc.setFont("helvetica", "normal");
+      y += 22;
+
+      selectedPoLines.forEach((line) => {
+        const qty = Number(line.quantity_ordered);
+        const cost = Number(line.unit_cost);
+        const lineTotal = qty * cost;
+
+        doc.text(String(line.description), marginX, y, { maxWidth: 260 });
+        doc.text(String(qty), 330, y, { align: "right" });
+        doc.text(`R${cost.toFixed(2)}`, 420, y, { align: "right" });
+        doc.text(`R${lineTotal.toFixed(2)}`, 520, y, { align: "right" });
+        y += 20;
+      });
+
+      y += 10;
+      doc.line(marginX, y, 520, y);
+      y += 24;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.text(`Total: R${Number(selectedPo.total).toFixed(2)}`, 520, y, { align: "right" });
+
+      if (selectedPo.notes) {
+        y += 40;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.text("Notes", marginX, y);
+        y += 16;
+        doc.setFont("helvetica", "normal");
+        doc.text(String(selectedPo.notes), marginX, y, { maxWidth: 472 });
+      }
+
+      doc.save(`${selectedPo.po_number}.pdf`);
+    } finally {
+      setExportingPdf(false);
     }
   }
 
@@ -563,9 +709,7 @@ export default function Suppliers({ business }) {
             {!ordersLoading && orders.length === 0 ? (
               <div className="sup-empty">
                 {suppliers.length === 0 ? (
-                  <>
-                    Add a supplier first, then create your first purchase order.
-                  </>
+                  <>Add a supplier first, then create your first purchase order.</>
                 ) : (
                   <>
                     No purchase orders yet.{" "}
@@ -760,7 +904,7 @@ export default function Suppliers({ business }) {
         </div>
       )}
 
-      {/* New purchase order modal */}
+      {/* New purchase order modal (also used for Reorder, pre-filled) */}
       {showPoModal && (
         <div className="sup-modal-overlay" onClick={() => setShowPoModal(false)}>
           <div className="sup-modal sup-modal--wide" onClick={(e) => e.stopPropagation()}>
@@ -902,6 +1046,44 @@ export default function Suppliers({ business }) {
                     <span className="sup-muted">R{Number(line.unit_cost).toFixed(2)} each</span>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Utility actions — always available once there's a real PO to act on */}
+            <div className="sup-drawer-actions">
+              <button
+                className="sup-secondary-btn"
+                onClick={handleDownloadPdf}
+                disabled={exportingPdf || poDetailLoading}
+              >
+                {exportingPdf ? <span className="sup-spinner" /> : "Download PDF"}
+              </button>
+              {selectedPo.status === "received" && (
+                <button
+                  className="sup-secondary-btn"
+                  onClick={() => openReorder(selectedPo, selectedPoLines)}
+                  disabled={poDetailLoading}
+                >
+                  Reorder
+                </button>
+              )}
+            </div>
+
+            {selectedPo.status === "received" && (
+              <div className="sup-drawer-actions">
+                <button
+                  className="sup-add-btn"
+                  onClick={handleLogToExpenses}
+                  disabled={loggingExpense || Boolean(selectedPo.expense_id)}
+                >
+                  {loggingExpense ? (
+                    <span className="sup-spinner" />
+                  ) : selectedPo.expense_id ? (
+                    "Logged to Expenses"
+                  ) : (
+                    "Log to Expenses"
+                  )}
+                </button>
               </div>
             )}
 
