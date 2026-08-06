@@ -658,6 +658,27 @@ h2 {
   color: var(--slate);
   flex-wrap: wrap;
 }
+.footer-links {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+.footer-link-btn {
+  background: none;
+  border: none;
+  color: var(--slate);
+  font-family: "Inter", sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+.footer-link-btn:hover {
+  color: #fff;
+}
+.footer-link-sep {
+  color: var(--slate);
+}
 
 @media (max-width: 900px) {
   .hero h1 {

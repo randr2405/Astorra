@@ -350,6 +350,15 @@ function Landing() {
             <span>Owned and operated by R&amp;R Agencies</span>
             <span>info@rragencies.co.za · 081 336 5266</span>
           </div>
+          <div className="footer-links">
+            <button className="footer-link-btn" onClick={() => navigate("/privacy")}>
+              Privacy Policy
+            </button>
+            <span className="footer-link-sep">·</span>
+            <button className="footer-link-btn" onClick={() => navigate("/terms")}>
+              Terms of Service
+            </button>
+          </div>
         </div>
       </footer>
     </div>
