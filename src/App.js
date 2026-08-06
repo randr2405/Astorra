@@ -17,6 +17,7 @@ import Invoices from "./pages/Invoices";
 import Inventory from "./pages/Inventory";
 import Assets from "./pages/Assets";
 import Suppliers from "./pages/Suppliers";
+import Payroll from "./pages/Payroll";
 import Staff from "./pages/Staff";
 import Bookings from "./pages/Bookings";
 import Documents from "./pages/Documents";
@@ -213,6 +214,19 @@ function App() {
               <Navigate to="/onboarding" replace />
             ) : (
               <Suppliers business={business} appUser={appUser} />
+            )
+          }
+        />
+
+        <Route
+          path="/dashboard/payroll"
+          element={
+            !user ? (
+              <Navigate to="/auth" replace />
+            ) : !business ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <Payroll business={business} appUser={appUser} />
             )
           }
         />

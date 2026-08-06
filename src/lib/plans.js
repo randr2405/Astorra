@@ -46,6 +46,7 @@ export const MODULE_CATALOG = [
   { key: "invoices", name: "Invoices", desc: "Convert quotes to invoices, track what's paid", initial: "I", category: "Finance", route: "invoices" },
   { key: "expenses", name: "Expenses", desc: "Log what you spend, attach receipts, see profit at a glance", initial: "E", category: "Finance", route: "expenses" },
   { key: "suppliers", name: "Purchase Orders / Suppliers", desc: "Track what you owe suppliers, order due dates, and goods received", initial: "P", category: "Finance", route: "suppliers" },
+  { key: "payroll", name: "Payroll", desc: "Run payroll, calculate PAYE/UIF automatically, and generate payslips", initial: "$", category: "Finance", route: "payroll" },
   { key: "inventory", name: "Inventory", desc: "Stock levels that stay accurate on their own", initial: "S", category: "Operations", route: "inventory" },
   { key: "assets", name: "Assets", desc: "Track equipment and gear — who has it, where it is, when it needs servicing", initial: "A", category: "Operations", route: "assets" },
   { key: "staff", name: "Staff / HR", desc: "Records and basics, without a separate system", initial: "H", category: "HR", route: "staff" },

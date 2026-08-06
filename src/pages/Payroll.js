@@ -1,0 +1,1194 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { supabase } from "../lib/supabaseClient";
+import jsPDF from "jspdf";
+import "./Payroll.css";
+
+const RUN_STATUS_OPTIONS = ["draft", "processed", "paid"];
+const RUN_STATUS_LABEL = {
+  draft: "Draft",
+  processed: "Processed",
+  paid: "Paid",
+};
+
+// ----------------------------------------------------------------------
+// PAYE / UIF calculation — SIMPLIFIED APPROXIMATION.
+//
+// Based on SARS 2024/2025 individual tax brackets and the primary
+// rebate, and the standard UIF earnings ceiling. This does NOT account
+// for medical aid tax credits, retirement annuity deductions, secondary/
+// tertiary rebates (65+/75+), or any other adjustments to taxable
+// income. It's a reasonable estimate for a small business's own payroll,
+// not a substitute for a payroll professional or accountant — review
+// the bracket figures at the start of each tax year.
+// ----------------------------------------------------------------------
+
+const TAX_BRACKETS_2024_25 = [
+  { upTo: 237100, base: 0, rate: 0.18, above: 0 },
+  { upTo: 370500, base: 42678, rate: 0.26, above: 237100 },
+  { upTo: 512800, base: 77362, rate: 0.31, above: 370500 },
+  { upTo: 673000, base: 121475, rate: 0.36, above: 512800 },
+  { upTo: 857900, base: 179147, rate: 0.39, above: 673000 },
+  { upTo: 1817000, base: 251258, rate: 0.41, above: 857900 },
+  { upTo: Infinity, base: 644489, rate: 0.45, above: 1817000 },
+];
+const PRIMARY_REBATE_ANNUAL = 17235;
+const UIF_CEILING_MONTHLY = 17712;
+const UIF_RATE = 0.01;
+
+// Average working days used to derive a daily rate for unpaid-leave
+// deductions on salaried staff. 21.67 = 260 working days / 12 months.
+const AVG_MONTHLY_WORKING_DAYS = 21.67;
+const AVG_WEEKLY_WORKING_DAYS = 5;
+
+function periodsPerYear(frequency) {
+  return frequency === "weekly" ? 52 : 12;
+}
+
+function calculatePAYEForPeriod(grossForPeriod, frequency) {
+  const periods = periodsPerYear(frequency);
+  const annualGross = grossForPeriod * periods;
+  const bracket = TAX_BRACKETS_2024_25.find((b) => annualGross <= b.upTo);
+  const annualTax = Math.max(0, bracket.base + (annualGross - bracket.above) * bracket.rate - PRIMARY_REBATE_ANNUAL);
+  return annualTax / periods;
+}
+
+function calculateUIFForPeriod(grossForPeriod, frequency) {
+  const periods = periodsPerYear(frequency);
+  const ceilingForPeriod = (UIF_CEILING_MONTHLY * 12) / periods;
+  const base = Math.min(grossForPeriod, ceilingForPeriod);
+  return { employee: base * UIF_RATE, employer: base * UIF_RATE };
+}
+
+// Computes a full payslip preview for one staff member.
+//   - hoursWorked: only used for hourly staff
+//   - daysAbsent: unpaid leave days, only applied to salaried staff —
+//     proportionally reduces base pay before tax
+//   - bonusTotal: sum of one-off additions (bonus/commission/overtime),
+//     added to gross AFTER the absence deduction, and is taxable
+function computePayslip(staffMember, hoursWorked, daysAbsent, bonusTotal) {
+  const frequency = staffMember.pay_frequency || "monthly";
+  const rate = Number(staffMember.pay_rate) || 0;
+
+  let basePay =
+    staffMember.employment_type === "hourly" ? rate * (Number(hoursWorked) || 0) : rate;
+
+  let absenceDeduction = 0;
+  const absentDays = Number(daysAbsent) || 0;
+  if (staffMember.employment_type !== "hourly" && absentDays > 0) {
+    const workingDays = frequency === "weekly" ? AVG_WEEKLY_WORKING_DAYS : AVG_MONTHLY_WORKING_DAYS;
+    const dailyRate = rate / workingDays;
+    absenceDeduction = dailyRate * absentDays;
+    basePay = Math.max(0, basePay - absenceDeduction);
+  }
+
+  const bonus = Number(bonusTotal) || 0;
+  const taxableGross = basePay + bonus;
+
+  const paye = calculatePAYEForPeriod(taxableGross, frequency);
+  const uif = calculateUIFForPeriod(taxableGross, frequency);
+  const netPay = taxableGross - paye - uif.employee;
+
+  return {
+    gross_pay: taxableGross,
+    base_pay: basePay,
+    absence_deduction: absenceDeduction,
+    bonus_total: bonus,
+    days_absent: absentDays,
+    paye,
+    uif_employee: uif.employee,
+    uif_employer: uif.employer,
+    other_deductions: 0,
+    net_pay: netPay,
+  };
+}
+
+function makeLocalId() {
+  return `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+const emptyCreateForm = {
+  period_start: "",
+  period_end: "",
+  pay_date: "",
+  notes: "",
+};
+
+export default function Payroll({ business }) {
+  const [mounted, setMounted] = useState(false);
+
+  const [payRuns, setPayRuns] = useState([]);
+  const [runsLoading, setRunsLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [search, setSearch] = useState("");
+
+  const [staff, setStaff] = useState([]);
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingRunId, setEditingRunId] = useState(null);
+  const [createForm, setCreateForm] = useState(emptyCreateForm);
+  const [includedStaffIds, setIncludedStaffIds] = useState([]);
+  const [hoursByStaffId, setHoursByStaffId] = useState({});
+  const [daysAbsentByStaffId, setDaysAbsentByStaffId] = useState({});
+  const [bonusItemsByStaffId, setBonusItemsByStaffId] = useState({});
+  const [savingRun, setSavingRun] = useState(false);
+  const [createFormError, setCreateFormError] = useState("");
+  const [confirmDeleteRunId, setConfirmDeleteRunId] = useState(null);
+
+  const [selectedRun, setSelectedRun] = useState(null);
+  const [selectedPayslips, setSelectedPayslips] = useState([]);
+  const [runDetailLoading, setRunDetailLoading] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [markingPaid, setMarkingPaid] = useState(false);
+  const [loggingExpense, setLoggingExpense] = useState(false);
+  const [exportingPayslipId, setExportingPayslipId] = useState(null);
+  const [exportingAll, setExportingAll] = useState(false);
+
+  const [toast, setToast] = useState(null);
+
+  function showToast(message) {
+    setToast(message);
+    setTimeout(() => setToast(null), 2600);
+  }
+
+  // ---- loaders ----
+  const loadPayRuns = useCallback(async () => {
+    setRunsLoading(true);
+    const { data, error } = await supabase
+      .from("pay_runs")
+      .select("*")
+      .eq("business_id", business.id)
+      .order("created_at", { ascending: false });
+    if (!error) setPayRuns(data || []);
+    setRunsLoading(false);
+  }, [business.id]);
+
+  const loadStaff = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("staff")
+      .select("*")
+      .eq("business_id", business.id)
+      .eq("employment_status", "active")
+      .order("full_name", { ascending: true });
+    if (!error) setStaff(data || []);
+  }, [business.id]);
+
+  useEffect(() => {
+    loadPayRuns();
+    loadStaff();
+  }, [loadPayRuns, loadStaff]);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const payableStaff = useMemo(
+    () => staff.filter((s) => s.pay_rate !== null && s.pay_rate !== undefined && s.pay_rate !== ""),
+    [staff]
+  );
+
+  // ---- derived: pay runs ----
+  const filteredRuns = useMemo(() => {
+    let list = [...payRuns];
+    if (statusFilter !== "all") {
+      list = list.filter((r) => r.status === statusFilter);
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter((r) => r.run_number.toLowerCase().includes(q));
+    }
+    return list;
+  }, [payRuns, statusFilter, search]);
+
+  const statusCounts = useMemo(() => {
+    const counts = { all: payRuns.length };
+    RUN_STATUS_OPTIONS.forEach((s) => {
+      counts[s] = payRuns.filter((r) => r.status === s).length;
+    });
+    return counts;
+  }, [payRuns]);
+
+  const totalPaidYtd = useMemo(
+    () =>
+      payRuns
+        .filter((r) => r.status === "paid")
+        .reduce((sum, r) => sum + Number(r.total_net || 0), 0),
+    [payRuns]
+  );
+
+  const openDraftCount = useMemo(
+    () => payRuns.filter((r) => r.status !== "paid").length,
+    [payRuns]
+  );
+
+  // ---- create / edit pay run ----
+  function resetStaffFormState() {
+    setHoursByStaffId({});
+    setDaysAbsentByStaffId({});
+    setBonusItemsByStaffId({});
+  }
+
+  function openCreateRun() {
+    const today = new Date();
+    const periodStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    const periodEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    setIsEditMode(false);
+    setEditingRunId(null);
+    setCreateForm({
+      period_start: periodStart.toISOString().slice(0, 10),
+      period_end: periodEnd.toISOString().slice(0, 10),
+      pay_date: periodEnd.toISOString().slice(0, 10),
+      notes: "",
+    });
+    setIncludedStaffIds(payableStaff.map((s) => s.id));
+    resetStaffFormState();
+    setCreateFormError("");
+    setShowCreateModal(true);
+  }
+
+  async function openEditRun(run) {
+    if (run.status !== "draft") return;
+
+    setIsEditMode(true);
+    setEditingRunId(run.id);
+    setCreateForm({
+      period_start: run.period_start,
+      period_end: run.period_end,
+      pay_date: run.pay_date,
+      notes: run.notes || "",
+    });
+    setCreateFormError("");
+    setShowCreateModal(true);
+
+    const { data, error } = await supabase
+      .from("payslips")
+      .select("*, payslip_line_items(*)")
+      .eq("pay_run_id", run.id);
+
+    if (error) {
+      showToast(error.message);
+      return;
+    }
+
+    const ids = [];
+    const hours = {};
+    const absent = {};
+    const bonus = {};
+
+    (data || []).forEach((p) => {
+      ids.push(p.staff_id);
+      if (p.hours_worked !== null && p.hours_worked !== undefined) {
+        hours[p.staff_id] = String(p.hours_worked);
+      }
+      if (Number(p.days_absent) > 0) {
+        absent[p.staff_id] = String(p.days_absent);
+      }
+      bonus[p.staff_id] = (p.payslip_line_items || []).map((li) => ({
+        id: li.id,
+        description: li.description,
+        amount: String(li.amount),
+      }));
+    });
+
+    setIncludedStaffIds(ids);
+    setHoursByStaffId(hours);
+    setDaysAbsentByStaffId(absent);
+    setBonusItemsByStaffId(bonus);
+  }
+
+  function closeCreateModal() {
+    setShowCreateModal(false);
+    setIsEditMode(false);
+    setEditingRunId(null);
+  }
+
+  function toggleIncludedStaff(staffId) {
+    setIncludedStaffIds((prev) =>
+      prev.includes(staffId) ? prev.filter((id) => id !== staffId) : [...prev, staffId]
+    );
+  }
+
+  function updateHours(staffId, value) {
+    setHoursByStaffId((prev) => ({ ...prev, [staffId]: value }));
+  }
+
+  function updateDaysAbsent(staffId, value) {
+    setDaysAbsentByStaffId((prev) => ({ ...prev, [staffId]: value }));
+  }
+
+  function addBonusItem(staffId) {
+    setBonusItemsByStaffId((prev) => {
+      const items = prev[staffId] || [];
+      return { ...prev, [staffId]: [...items, { id: makeLocalId(), description: "", amount: "" }] };
+    });
+  }
+
+  function updateBonusItem(staffId, itemId, field, value) {
+    setBonusItemsByStaffId((prev) => ({
+      ...prev,
+      [staffId]: (prev[staffId] || []).map((it) => (it.id === itemId ? { ...it, [field]: value } : it)),
+    }));
+  }
+
+  function removeBonusItem(staffId, itemId) {
+    setBonusItemsByStaffId((prev) => ({
+      ...prev,
+      [staffId]: (prev[staffId] || []).filter((it) => it.id !== itemId),
+    }));
+  }
+
+  const previewPayslips = useMemo(() => {
+    return payableStaff
+      .filter((s) => includedStaffIds.includes(s.id))
+      .map((s) => {
+        const bonusItems = bonusItemsByStaffId[s.id] || [];
+        const bonusTotal = bonusItems.reduce((sum, it) => sum + (Number(it.amount) || 0), 0);
+        return {
+          staff: s,
+          bonusItems,
+          ...computePayslip(s, hoursByStaffId[s.id], daysAbsentByStaffId[s.id], bonusTotal),
+        };
+      });
+  }, [payableStaff, includedStaffIds, hoursByStaffId, daysAbsentByStaffId, bonusItemsByStaffId]);
+
+  const previewTotals = useMemo(() => {
+    return previewPayslips.reduce(
+      (acc, p) => ({
+        gross: acc.gross + p.gross_pay,
+        deductions: acc.deductions + p.paye + p.uif_employee + p.other_deductions,
+        net: acc.net + p.net_pay,
+      }),
+      { gross: 0, deductions: 0, net: 0 }
+    );
+  }, [previewPayslips]);
+
+  // Builds payslip rows (without pay_run_id) plus a parallel line-items
+  // list keyed by staff_id, ready to insert once payslip ids are known.
+  function buildPayslipInsertRows(payRunId) {
+    const payslipRows = previewPayslips.map((p) => ({
+      pay_run_id: payRunId,
+      staff_id: p.staff.id,
+      gross_pay: p.gross_pay,
+      paye: p.paye,
+      uif_employee: p.uif_employee,
+      uif_employer: p.uif_employer,
+      other_deductions: p.other_deductions,
+      net_pay: p.net_pay,
+      hours_worked: p.staff.employment_type === "hourly" ? Number(hoursByStaffId[p.staff.id]) || 0 : null,
+      days_absent: p.days_absent || 0,
+    }));
+    return payslipRows;
+  }
+
+  async function insertLineItemsForPayslips(insertedPayslips) {
+    const lineItemRows = [];
+    insertedPayslips.forEach((row) => {
+      const preview = previewPayslips.find((p) => p.staff.id === row.staff_id);
+      (preview?.bonusItems || []).forEach((it) => {
+        const amount = Number(it.amount);
+        if (it.description.trim() && amount > 0) {
+          lineItemRows.push({
+            payslip_id: row.id,
+            description: it.description.trim(),
+            amount,
+          });
+        }
+      });
+    });
+    if (lineItemRows.length === 0) return { error: null };
+    const { error } = await supabase.from("payslip_line_items").insert(lineItemRows);
+    return { error };
+  }
+
+  async function handleSaveRun(e) {
+    e.preventDefault();
+
+    if (!createForm.period_start || !createForm.period_end || !createForm.pay_date) {
+      setCreateFormError("Period start, period end, and pay date are all required.");
+      return;
+    }
+    if (previewPayslips.length === 0) {
+      setCreateFormError("Include at least one staff member.");
+      return;
+    }
+
+    setSavingRun(true);
+    setCreateFormError("");
+
+    if (isEditMode) {
+      const { error: updateError } = await supabase
+        .from("pay_runs")
+        .update({
+          period_start: createForm.period_start,
+          period_end: createForm.period_end,
+          pay_date: createForm.pay_date,
+          notes: createForm.notes.trim() || null,
+          total_gross: previewTotals.gross,
+          total_deductions: previewTotals.deductions,
+          total_net: previewTotals.net,
+        })
+        .eq("id", editingRunId);
+
+      if (updateError) {
+        setSavingRun(false);
+        setCreateFormError(updateError.message);
+        return;
+      }
+
+      // Draft-only edit: simplest safe approach is to replace all
+      // payslips (and their line items, via cascade) for this run.
+      const { error: deleteError } = await supabase
+        .from("payslips")
+        .delete()
+        .eq("pay_run_id", editingRunId);
+
+      if (deleteError) {
+        setSavingRun(false);
+        setCreateFormError(deleteError.message);
+        return;
+      }
+
+      const { data: insertedPayslips, error: insertError } = await supabase
+        .from("payslips")
+        .insert(buildPayslipInsertRows(editingRunId))
+        .select();
+
+      if (insertError) {
+        setSavingRun(false);
+        setCreateFormError(insertError.message);
+        return;
+      }
+
+      const { error: liError } = await insertLineItemsForPayslips(insertedPayslips);
+      setSavingRun(false);
+
+      if (liError) {
+        setCreateFormError(liError.message);
+        return;
+      }
+
+      closeCreateModal();
+      showToast("Pay run updated");
+      loadPayRuns();
+      if (selectedRun?.id === editingRunId) {
+        openRunDetail({ ...selectedRun, ...createForm });
+      }
+      return;
+    }
+
+    // ---- create flow ----
+    const { data: nextNumber, error: numError } = await supabase.rpc("get_next_number", {
+      p_business_id: business.id,
+      p_counter_key: "pay_run",
+    });
+
+    if (numError) {
+      setSavingRun(false);
+      setCreateFormError(numError.message);
+      return;
+    }
+
+    const { data: run, error: runError } = await supabase
+      .from("pay_runs")
+      .insert({
+        business_id: business.id,
+        run_number: `PR-${String(nextNumber).padStart(4, "0")}`,
+        period_start: createForm.period_start,
+        period_end: createForm.period_end,
+        pay_date: createForm.pay_date,
+        status: "draft",
+        total_gross: previewTotals.gross,
+        total_deductions: previewTotals.deductions,
+        total_net: previewTotals.net,
+        notes: createForm.notes.trim() || null,
+      })
+      .select()
+      .single();
+
+    if (runError) {
+      setSavingRun(false);
+      setCreateFormError(runError.message);
+      return;
+    }
+
+    const { data: insertedPayslips, error: payslipsError } = await supabase
+      .from("payslips")
+      .insert(buildPayslipInsertRows(run.id))
+      .select();
+
+    if (payslipsError) {
+      setSavingRun(false);
+      setCreateFormError(payslipsError.message);
+      return;
+    }
+
+    const { error: liError } = await insertLineItemsForPayslips(insertedPayslips);
+    setSavingRun(false);
+
+    if (liError) {
+      setCreateFormError(liError.message);
+      return;
+    }
+
+    closeCreateModal();
+    showToast("Pay run created");
+    loadPayRuns();
+  }
+
+  async function handleDeleteRun(id) {
+    const { error } = await supabase.from("pay_runs").delete().eq("id", id);
+    setConfirmDeleteRunId(null);
+    if (!error) {
+      showToast("Pay run removed");
+      loadPayRuns();
+      if (selectedRun?.id === id) setSelectedRun(null);
+    }
+  }
+
+  async function openRunDetail(run) {
+    setSelectedRun(run);
+    setRunDetailLoading(true);
+    const { data } = await supabase
+      .from("payslips")
+      .select("*, staff(full_name, employment_type), payslip_line_items(*)")
+      .eq("pay_run_id", run.id);
+    setSelectedPayslips(data || []);
+    setRunDetailLoading(false);
+  }
+
+  async function handleProcessRun() {
+    if (!selectedRun) return;
+    setProcessing(true);
+    const { error } = await supabase
+      .from("pay_runs")
+      .update({ status: "processed" })
+      .eq("id", selectedRun.id);
+    setProcessing(false);
+    if (!error) {
+      showToast("Pay run marked as processed");
+      setSelectedRun({ ...selectedRun, status: "processed" });
+      loadPayRuns();
+    }
+  }
+
+  async function handleMarkPaid() {
+    if (!selectedRun) return;
+    setMarkingPaid(true);
+    const { error } = await supabase
+      .from("pay_runs")
+      .update({ status: "paid" })
+      .eq("id", selectedRun.id);
+    setMarkingPaid(false);
+    if (!error) {
+      showToast("Pay run marked as paid");
+      setSelectedRun({ ...selectedRun, status: "paid" });
+      loadPayRuns();
+    }
+  }
+
+  // Logs the pay run's total cost (net pay + employer UIF contribution)
+  // to Expenses under category "payroll", and stamps pay_runs.expense_id
+  // so it can't be logged twice — same guard pattern as Suppliers' POs.
+  async function handleLogToExpenses() {
+    if (!selectedRun || selectedRun.expense_id) return;
+    setLoggingExpense(true);
+
+    const employerUifTotal = selectedPayslips.reduce((sum, p) => sum + Number(p.uif_employer || 0), 0);
+    const totalCost = Number(selectedRun.total_net) + employerUifTotal;
+
+    const { data: expense, error: expenseError } = await supabase
+      .from("expenses")
+      .insert({
+        business_id: business.id,
+        category: "payroll",
+        vendor: "Payroll",
+        description: `Pay run ${selectedRun.run_number} (${selectedRun.period_start} to ${selectedRun.period_end})`,
+        amount: totalCost,
+        expense_date: selectedRun.pay_date,
+      })
+      .select()
+      .single();
+
+    if (expenseError) {
+      setLoggingExpense(false);
+      showToast(expenseError.message);
+      return;
+    }
+
+    const { error: runError } = await supabase
+      .from("pay_runs")
+      .update({ expense_id: expense.id })
+      .eq("id", selectedRun.id);
+
+    setLoggingExpense(false);
+
+    if (runError) {
+      showToast(runError.message);
+      return;
+    }
+
+    showToast("Logged to Expenses");
+    setSelectedRun({ ...selectedRun, expense_id: expense.id });
+    loadPayRuns();
+  }
+
+  // Draws one payslip's content into a jsPDF doc, starting at the given
+  // y offset. Shared by the single-payslip download and the "download
+  // all" combined PDF so both stay in sync.
+  function drawPayslipContent(doc, payslip) {
+    const marginX = 48;
+    let y = 56;
+
+    const bonusItems = payslip.payslip_line_items || [];
+    const bonusTotal = bonusItems.reduce((sum, li) => sum + Number(li.amount || 0), 0);
+    const basePay = Number(payslip.gross_pay) - bonusTotal;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(20);
+    doc.text(business.name || "Payslip", marginX, y);
+
+    doc.setFontSize(11);
+    doc.setFont("helvetica", "normal");
+    y += 26;
+    doc.text(`Payslip — ${selectedRun.run_number}`, marginX, y);
+
+    y += 20;
+    doc.text(`Period: ${selectedRun.period_start} to ${selectedRun.period_end}`, marginX, y);
+
+    y += 34;
+    doc.setFont("helvetica", "bold");
+    doc.text("Employee", marginX, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Pay date: ${selectedRun.pay_date}`, 340, y);
+
+    y += 16;
+    doc.text(payslip.staff?.full_name || "—", marginX, y);
+    if (Number(payslip.days_absent) > 0) {
+      y += 16;
+      doc.setFontSize(10);
+      doc.text(`Unpaid leave: ${payslip.days_absent} day(s)`, marginX, y);
+      doc.setFontSize(11);
+    }
+
+    y += 34;
+    doc.setFont("helvetica", "bold");
+    doc.text("Description", marginX, y);
+    doc.text("Amount", 520, y, { align: "right" });
+    doc.setLineWidth(0.5);
+    doc.line(marginX, y + 6, 520, y + 6);
+
+    doc.setFont("helvetica", "normal");
+    y += 22;
+
+    const rows = [["Base pay", basePay]];
+    bonusItems.forEach((li) => rows.push([li.description, Number(li.amount)]));
+    rows.push(["PAYE", -Number(payslip.paye)]);
+    rows.push(["UIF (employee)", -Number(payslip.uif_employee)]);
+    if (Number(payslip.other_deductions) > 0) {
+      rows.push(["Other deductions", -Number(payslip.other_deductions)]);
+    }
+
+    rows.forEach(([label, amount]) => {
+      doc.text(label, marginX, y);
+      doc.text(`R${amount.toFixed(2)}`, 520, y, { align: "right" });
+      y += 20;
+    });
+
+    y += 10;
+    doc.line(marginX, y, 520, y);
+    y += 24;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    doc.text(`Net pay: R${Number(payslip.net_pay).toFixed(2)}`, 520, y, { align: "right" });
+  }
+
+  function handleDownloadPayslip(payslip) {
+    setExportingPayslipId(payslip.id);
+    try {
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      drawPayslipContent(doc, payslip);
+      doc.save(`${selectedRun.run_number}-${(payslip.staff?.full_name || "payslip").replace(/\s+/g, "_")}.pdf`);
+    } finally {
+      setExportingPayslipId(null);
+    }
+  }
+
+  function handleDownloadAllPayslips() {
+    if (!selectedRun || selectedPayslips.length === 0) return;
+    setExportingAll(true);
+    try {
+      const doc = new jsPDF({ unit: "pt", format: "a4" });
+      selectedPayslips.forEach((payslip, i) => {
+        if (i > 0) doc.addPage();
+        drawPayslipContent(doc, payslip);
+      });
+      doc.save(`${selectedRun.run_number}-all-payslips.pdf`);
+    } finally {
+      setExportingAll(false);
+    }
+  }
+
+  return (
+    <div className="pay-page">
+      <div className="pay-body">
+        <div className={`pay-header ${mounted ? "pay-in" : ""}`}>
+          <div>
+            <p className="pay-eyebrow">Finance</p>
+            <h1 className="pay-heading">Payroll</h1>
+          </div>
+          <div className="pay-header-actions">
+            <button className="pay-add-btn" onClick={openCreateRun} disabled={payableStaff.length === 0}>
+              + New pay run
+            </button>
+          </div>
+        </div>
+
+        <div className={`pay-stats ${mounted ? "pay-in" : ""}`}>
+          <div className="pay-stat-card">
+            <p className="pay-stat-label">Staff on payroll</p>
+            <p className="pay-stat-value">{payableStaff.length}</p>
+          </div>
+          <div className="pay-stat-card">
+            <p className="pay-stat-label">Open pay runs</p>
+            <p className="pay-stat-value">{openDraftCount}</p>
+          </div>
+          <div className="pay-stat-card">
+            <p className="pay-stat-label">Total paid (YTD)</p>
+            <p className="pay-stat-value">R{totalPaidYtd.toFixed(2)}</p>
+          </div>
+        </div>
+
+        {!runsLoading && payableStaff.length === 0 ? (
+          <div className="pay-empty">
+            No staff are set up for payroll yet. Add an employment type and pay rate to a staff
+            member in the Staff module to include them here.
+          </div>
+        ) : !runsLoading && payRuns.length === 0 ? (
+          <div className="pay-empty">
+            No pay runs yet.{" "}
+            <button className="pay-inline-link" onClick={openCreateRun}>
+              Create your first one
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="pay-toolbar">
+              <div className="pay-filters">
+                <button
+                  className={`pay-filter-btn ${statusFilter === "all" ? "pay-filter-btn--active" : ""}`}
+                  onClick={() => setStatusFilter("all")}
+                >
+                  All <span className="pay-filter-count">{statusCounts.all}</span>
+                </button>
+                {RUN_STATUS_OPTIONS.map((s) => (
+                  <button
+                    key={s}
+                    className={`pay-filter-btn ${statusFilter === s ? "pay-filter-btn--active" : ""}`}
+                    onClick={() => setStatusFilter(s)}
+                  >
+                    {RUN_STATUS_LABEL[s]} <span className="pay-filter-count">{statusCounts[s]}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="pay-toolbar-right">
+                <div className="pay-search-wrap">
+                  <svg
+                    className="pay-search-icon"
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <circle cx="11" cy="11" r="8" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <input
+                    className="pay-search-input"
+                    placeholder="Search run #..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pay-table-wrap">
+              {runsLoading ? (
+                <div className="pay-skeleton">
+                  {[...Array(4)].map((_, i) => (
+                    <div key={i} className="pay-skeleton-row" style={{ animationDelay: `${i * 0.06}s` }} />
+                  ))}
+                </div>
+              ) : (
+                <table className="pay-table">
+                  <thead>
+                    <tr>
+                      <th>Run #</th>
+                      <th>Period</th>
+                      <th>Pay date</th>
+                      <th>Status</th>
+                      <th>Net total</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRuns.map((run, i) => (
+                      <tr
+                        key={run.id}
+                        className="pay-row"
+                        style={{ animationDelay: `${i * 0.03}s` }}
+                        onClick={() => openRunDetail(run)}
+                      >
+                        <td className="pay-name-cell">{run.run_number}</td>
+                        <td className="pay-muted">
+                          {run.period_start} – {run.period_end}
+                        </td>
+                        <td className="pay-muted">{run.pay_date}</td>
+                        <td>
+                          <span className={`pay-status pay-status--${run.status}`}>
+                            {RUN_STATUS_LABEL[run.status]}
+                          </span>
+                        </td>
+                        <td className="pay-muted">R{Number(run.total_net).toFixed(2)}</td>
+                        <td className="pay-actions-cell" onClick={(e) => e.stopPropagation()}>
+                          {confirmDeleteRunId === run.id ? (
+                            <div className="pay-confirm-row">
+                              Delete?
+                              <button className="pay-confirm-yes" onClick={() => handleDeleteRun(run.id)}>
+                                Yes
+                              </button>
+                              <button className="pay-confirm-no" onClick={() => setConfirmDeleteRunId(null)}>
+                                No
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              {run.status === "draft" && (
+                                <button className="pay-action-btn" onClick={() => openEditRun(run)}>
+                                  Edit
+                                </button>
+                              )}
+                              <button
+                                className="pay-action-btn pay-action-btn--danger"
+                                onClick={() => setConfirmDeleteRunId(run.id)}
+                              >
+                                Delete
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* New / edit pay run modal */}
+      {showCreateModal && (
+        <div className="pay-modal-overlay" onClick={closeCreateModal}>
+          <div className="pay-modal pay-modal--wide" onClick={(e) => e.stopPropagation()}>
+            <h2>{isEditMode ? "Edit pay run" : "New pay run"}</h2>
+            <form onSubmit={handleSaveRun}>
+              <div className="pay-input-row pay-input-row--three">
+                <div>
+                  <label className="pay-label">Period start</label>
+                  <input
+                    type="date"
+                    className="pay-input"
+                    value={createForm.period_start}
+                    onChange={(e) => setCreateForm({ ...createForm, period_start: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="pay-label">Period end</label>
+                  <input
+                    type="date"
+                    className="pay-input"
+                    value={createForm.period_end}
+                    onChange={(e) => setCreateForm({ ...createForm, period_end: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="pay-label">Pay date</label>
+                  <input
+                    type="date"
+                    className="pay-input"
+                    value={createForm.pay_date}
+                    onChange={(e) => setCreateForm({ ...createForm, pay_date: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <label className="pay-label">Staff included</label>
+              <div className="pay-staff-list">
+                {payableStaff.map((s) => {
+                  const included = includedStaffIds.includes(s.id);
+                  const isHourly = s.employment_type === "hourly";
+                  const bonusItems = bonusItemsByStaffId[s.id] || [];
+                  return (
+                    <div className="pay-staff-row-wrap" key={s.id}>
+                      <div className="pay-staff-row">
+                        <label className="pay-staff-checkbox">
+                          <input
+                            type="checkbox"
+                            checked={included}
+                            onChange={() => toggleIncludedStaff(s.id)}
+                          />
+                          <span className="pay-staff-name">{s.full_name}</span>
+                          <span className="pay-staff-meta">
+                            {isHourly ? "Hourly" : "Salaried"} · R{Number(s.pay_rate).toFixed(2)}
+                            {isHourly ? "/hr" : ` / ${s.pay_frequency || "monthly"}`}
+                          </span>
+                        </label>
+                        {included && isHourly && (
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            className="pay-input pay-hours-input"
+                            placeholder="Hours"
+                            value={hoursByStaffId[s.id] || ""}
+                            onChange={(e) => updateHours(s.id, e.target.value)}
+                          />
+                        )}
+                        {included && !isHourly && (
+                          <input
+                            type="number"
+                            step="0.5"
+                            min="0"
+                            className="pay-input pay-days-absent-input"
+                            placeholder="Days absent"
+                            value={daysAbsentByStaffId[s.id] || ""}
+                            onChange={(e) => updateDaysAbsent(s.id, e.target.value)}
+                          />
+                        )}
+                      </div>
+
+                      {included && (
+                        <div className="pay-bonus-section">
+                          {bonusItems.map((item) => (
+                            <div className="pay-bonus-row" key={item.id}>
+                              <input
+                                className="pay-input pay-bonus-desc"
+                                placeholder="Bonus / overtime description"
+                                value={item.description}
+                                onChange={(e) => updateBonusItem(s.id, item.id, "description", e.target.value)}
+                              />
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                className="pay-input pay-bonus-amount"
+                                placeholder="Amount"
+                                value={item.amount}
+                                onChange={(e) => updateBonusItem(s.id, item.id, "amount", e.target.value)}
+                              />
+                              <button
+                                type="button"
+                                className="pay-bonus-remove"
+                                onClick={() => removeBonusItem(s.id, item.id)}
+                                aria-label="Remove line item"
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                          <button type="button" className="pay-bonus-add" onClick={() => addBonusItem(s.id)}>
+                            + Add bonus / overtime
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              <label className="pay-label">Notes</label>
+              <textarea
+                className="pay-input"
+                rows={2}
+                value={createForm.notes}
+                onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
+              />
+
+              <div className="pay-preview">
+                <div className="pay-preview-row">
+                  <span>Gross</span>
+                  <span>R{previewTotals.gross.toFixed(2)}</span>
+                </div>
+                <div className="pay-preview-row">
+                  <span>Deductions (PAYE + UIF)</span>
+                  <span>-R{previewTotals.deductions.toFixed(2)}</span>
+                </div>
+                <div className="pay-preview-row pay-preview-row--total">
+                  <span>Net pay</span>
+                  <span>R{previewTotals.net.toFixed(2)}</span>
+                </div>
+              </div>
+
+              {createFormError && <p className="pay-error">{createFormError}</p>}
+
+              <div className="pay-modal-actions">
+                <button type="button" className="pay-cancel-btn" onClick={closeCreateModal}>
+                  Cancel
+                </button>
+                <button type="submit" className="pay-add-btn" disabled={savingRun}>
+                  {savingRun ? (
+                    <span className="pay-spinner" />
+                  ) : isEditMode ? (
+                    "Save changes"
+                  ) : (
+                    "Create pay run"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Pay run detail drawer */}
+      {selectedRun && (
+        <div className="pay-drawer-overlay" onClick={() => setSelectedRun(null)}>
+          <div className="pay-drawer" onClick={(e) => e.stopPropagation()}>
+            <button className="pay-drawer-close" onClick={() => setSelectedRun(null)}>
+              ×
+            </button>
+            <h2>{selectedRun.run_number}</h2>
+            <p className="pay-drawer-sub">
+              {selectedRun.period_start} – {selectedRun.period_end}
+            </p>
+
+            <div className="pay-meta-grid">
+              <div className="pay-meta-item">
+                <p className="pay-meta-label">Status</p>
+                <p className="pay-meta-value">{RUN_STATUS_LABEL[selectedRun.status]}</p>
+              </div>
+              <div className="pay-meta-item">
+                <p className="pay-meta-label">Pay date</p>
+                <p className="pay-meta-value">{selectedRun.pay_date}</p>
+              </div>
+              <div className="pay-meta-item">
+                <p className="pay-meta-label">Net total</p>
+                <p className="pay-meta-value">R{Number(selectedRun.total_net).toFixed(2)}</p>
+              </div>
+            </div>
+
+            {selectedRun.status === "draft" && (
+              <button
+                className="pay-action-btn pay-edit-run-btn"
+                onClick={() => openEditRun(selectedRun)}
+              >
+                Edit this pay run
+              </button>
+            )}
+
+            <div className="pay-section-header">
+              <div className="pay-section-title">Payslips</div>
+              {selectedPayslips.length > 0 && (
+                <button
+                  className="pay-download-all-btn"
+                  onClick={handleDownloadAllPayslips}
+                  disabled={exportingAll}
+                >
+                  {exportingAll ? <span className="pay-spinner" /> : "Download all (PDF)"}
+                </button>
+              )}
+            </div>
+
+            {runDetailLoading ? (
+              <p className="pay-log-empty">Loading...</p>
+            ) : (
+              <div className="pay-payslips">
+                {selectedPayslips.map((p) => {
+                  const bonusItems = p.payslip_line_items || [];
+                  const bonusTotal = bonusItems.reduce((sum, li) => sum + Number(li.amount || 0), 0);
+                  return (
+                    <div key={p.id} className="pay-payslip">
+                      <div className="pay-payslip-top">
+                        <span>{p.staff?.full_name || "—"}</span>
+                        <span className="pay-muted">R{Number(p.net_pay).toFixed(2)} net</span>
+                      </div>
+                      <div className="pay-payslip-meta">
+                        <span className="pay-muted">Gross R{Number(p.gross_pay).toFixed(2)}</span>
+                        <span className="pay-muted">PAYE R{Number(p.paye).toFixed(2)}</span>
+                        <span className="pay-muted">UIF R{Number(p.uif_employee).toFixed(2)}</span>
+                        {Number(p.days_absent) > 0 && (
+                          <span className="pay-badge pay-badge--absent">{p.days_absent} day(s) absent</span>
+                        )}
+                        {bonusTotal > 0 && (
+                          <span className="pay-badge pay-badge--bonus">+R{bonusTotal.toFixed(2)} bonus/OT</span>
+                        )}
+                      </div>
+                      {bonusItems.length > 0 && (
+                        <div className="pay-payslip-line-items">
+                          {bonusItems.map((li) => (
+                            <div className="pay-payslip-line-item" key={li.id}>
+                              <span>{li.description}</span>
+                              <span>R{Number(li.amount).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        className="pay-payslip-download"
+                        onClick={() => handleDownloadPayslip(p)}
+                        disabled={exportingPayslipId === p.id}
+                      >
+                        {exportingPayslipId === p.id ? <span className="pay-spinner" /> : "Download PDF"}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {selectedRun.status === "paid" && (
+              <div className="pay-drawer-actions">
+                <button
+                  className="pay-add-btn"
+                  onClick={handleLogToExpenses}
+                  disabled={loggingExpense || Boolean(selectedRun.expense_id)}
+                >
+                  {loggingExpense ? (
+                    <span className="pay-spinner" />
+                  ) : selectedRun.expense_id ? (
+                    "Logged to Expenses"
+                  ) : (
+                    "Log to Expenses"
+                  )}
+                </button>
+              </div>
+            )}
+
+            {selectedRun.status === "draft" && (
+              <div className="pay-drawer-actions">
+                <button className="pay-add-btn" onClick={handleProcessRun} disabled={processing}>
+                  {processing ? <span className="pay-spinner" /> : "Mark as processed"}
+                </button>
+              </div>
+            )}
+
+            {selectedRun.status === "processed" && (
+              <div className="pay-drawer-actions">
+                <button className="pay-add-btn" onClick={handleMarkPaid} disabled={markingPaid}>
+                  {markingPaid ? <span className="pay-spinner" /> : "Mark as paid"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {toast && <div className="pay-toast pay-toast--success">{toast}</div>}
+    </div>
+  );
+}
