@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { auth } from "../lib/firebase";
 import { supabase } from "../lib/supabaseClient";
 import "./TeamSettings.css";
 
