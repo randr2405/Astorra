@@ -54,38 +54,16 @@ function TeamSettings({ business, appUser }) {
     setInviteSuccess("");
     setInviteSubmitting(true);
 
+    let invite = null;
+
     try {
-      const { data: invite, error: rpcError } = await supabase.rpc("create_staff_invite", {
+      const { data, error: rpcError } = await supabase.rpc("create_staff_invite", {
         p_email: inviteEmail,
         p_role: inviteRole,
       });
 
       if (rpcError) throw rpcError;
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData?.session?.access_token;
-
-      const { error: fnError } = await supabase.functions.invoke("send-staff-invite", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: {
-          toEmail: inviteEmail,
-          businessName: business.name,
-          role: inviteRole,
-          inviteToken: invite.token,
-        },
-      });
-
-      if (fnError) {
-        setInviteSuccess(
-          "Invite created, but the email couldn't be sent. Copy the link below and share it manually."
-        );
-      } else {
-        setInviteSuccess("Invite sent!");
-      }
-
-      setInviteEmail("");
-      setInviteRole("staff");
-      await loadData();
+      invite = data;
     } catch (err) {
       setInviteError(
         err.message?.includes("INVITE_ALREADY_PENDING")
@@ -93,6 +71,36 @@ function TeamSettings({ business, appUser }) {
           : err.message?.includes("ONLY_OWNER_CAN_INVITE")
           ? "Only the business owner can send invites."
           : "Something went wrong creating the invite. Please try again."
+      );
+      setInviteSubmitting(false);
+      return;
+    }
+
+    // Invite row is created at this point regardless of what happens next,
+    // so refresh the list and clear the form even if email sending fails.
+    setInviteEmail("");
+    setInviteRole("staff");
+    await loadData();
+
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+
+      const { error: fnError } = await supabase.functions.invoke("send-staff-invite", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: {
+          toEmail: invite.email,
+          businessName: business.name,
+          role: invite.role,
+          inviteToken: invite.token,
+        },
+      });
+
+      if (fnError) throw fnError;
+      setInviteSuccess("Invite sent!");
+    } catch {
+      setInviteSuccess(
+        "Invite created, but the email couldn't be sent. You can find it under Pending invites and share the link manually."
       );
     } finally {
       setInviteSubmitting(false);
