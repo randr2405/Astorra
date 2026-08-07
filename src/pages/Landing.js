@@ -175,6 +175,9 @@ function Landing() {
         <div className="nav-inner">
           <span className="wordmark">ASTORRA</span>
           <div className="nav-actions">
+            <button className="link-btn" onClick={() => navigate("/feedback")}>
+              Feedback
+            </button>
             <button className="link-btn" onClick={() => navigate("/auth")}>
               Log in
             </button>
@@ -351,6 +354,10 @@ function Landing() {
             <span>info@rragencies.co.za · 081 336 5266</span>
           </div>
           <div className="footer-links">
+            <button className="footer-link-btn" onClick={() => navigate("/feedback")}>
+              Feedback
+            </button>
+            <span className="footer-link-sep">·</span>
             <button className="footer-link-btn" onClick={() => navigate("/privacy")}>
               Privacy Policy
             </button>

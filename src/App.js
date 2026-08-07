@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import PayInvoice from "./pages/PayInvoice";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
+import Feedback from "./pages/Feedback";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
@@ -107,6 +108,10 @@ function App() {
         {/* Public, unauthenticated legal pages — same tier as Landing/Auth. */}
         <Route path="/privacy" element={<Privacy />} />
         <Route path="/terms" element={<Terms />} />
+
+        {/* Public, unauthenticated feedback / recommendations page — same
+            tier as Landing/Privacy/Terms. */}
+        <Route path="/feedback" element={<Feedback />} />
 
         <Route
           path="/auth"
