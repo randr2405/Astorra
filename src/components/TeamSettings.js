@@ -28,7 +28,7 @@ function TeamSettings({ business, appUser }) {
         .eq("business_id", business.id)
         .order("created_at", { ascending: true }),
       supabase
-        .from("invites")
+        .from("staff_invites")
         .select("*")
         .eq("business_id", business.id)
         .eq("status", "pending")
@@ -55,7 +55,7 @@ function TeamSettings({ business, appUser }) {
     setInviteSubmitting(true);
 
     try {
-      const { data: token, error: rpcError } = await supabase.rpc("create_staff_invite", {
+      const { data: invite, error: rpcError } = await supabase.rpc("create_staff_invite", {
         p_email: inviteEmail,
         p_role: inviteRole,
       });
@@ -71,7 +71,7 @@ function TeamSettings({ business, appUser }) {
           toEmail: inviteEmail,
           businessName: business.name,
           role: inviteRole,
-          inviteToken: token,
+          inviteToken: invite.token,
         },
       });
 
@@ -88,8 +88,10 @@ function TeamSettings({ business, appUser }) {
       await loadData();
     } catch (err) {
       setInviteError(
-        err.message?.includes("already")
-          ? "This email already has a pending invite or is already on your team."
+        err.message?.includes("INVITE_ALREADY_PENDING")
+          ? "This email already has a pending invite."
+          : err.message?.includes("ONLY_OWNER_CAN_INVITE")
+          ? "Only the business owner can send invites."
           : "Something went wrong creating the invite. Please try again."
       );
     } finally {
@@ -100,10 +102,12 @@ function TeamSettings({ business, appUser }) {
   const handleRevoke = async (inviteId) => {
     setRevokingId(inviteId);
     try {
-      const { error: rpcError } = await supabase.rpc("revoke_staff_invite", {
-        p_invite_id: inviteId,
-      });
-      if (rpcError) throw rpcError;
+      const { error: updateError } = await supabase
+        .from("staff_invites")
+        .update({ status: "revoked" })
+        .eq("id", inviteId);
+
+      if (updateError) throw updateError;
       setInvites((prev) => prev.filter((i) => i.id !== inviteId));
     } catch {
       setError("Couldn't revoke that invite. Please try again.");
@@ -162,7 +166,9 @@ function TeamSettings({ business, appUser }) {
               >
                 <option value="staff">Staff</option>
                 <option value="manager">Manager</option>
-                <option value="admin">Admin</option>
+                <option value="hr">HR</option>
+                <option value="finance">Finance</option>
+                <option value="reception">Reception</option>
               </select>
             </div>
           </div>
