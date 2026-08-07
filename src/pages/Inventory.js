@@ -1,330 +1,264 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import * as XLSX from "xlsx";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "../lib/supabaseClient";
+import { generateNumber } from "../lib/numbering";
 import { notify } from "../lib/notifications";
+import { generateInvoicePdf, downloadPdf, pdfToBase64 } from "../lib/pdfGenerator";
+import { sendDocumentEmail } from "../lib/sendDocument";
 import AppNav from "../components/AppNav";
-import "./Inventory.css";
+import "./Invoices.css";
 
-const DEFAULT_LOW_STOCK_THRESHOLD = 5;
-const UNCATEGORIZED = "Uncategorized";
+const STATUSES = ["unpaid", "paid", "overdue"];
+const SEND_COOLDOWN_MS = 30000;
+const ATTACHMENT_BUCKET = "invoice-attachments";
 
-function Inventory({ business, appUser }) {
-  const [items, setItems] = useState([]);
+function emptyLineItem() {
+  return { description: "", quantity: 1, unit_price: 0 };
+}
+
+function calcTotal(items) {
+  return items.reduce(
+    (sum, i) => sum + (Number(i.quantity) || 0) * (Number(i.unit_price) || 0),
+    0
+  );
+}
+
+function formatDueDate(dateStr) {
+  if (!dateStr) return "—";
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function isPastDue(dateStr) {
+  if (!dateStr) return false;
+  const d = new Date(dateStr + "T00:00:00");
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d < today;
+}
+
+function toCsvValue(val) {
+  const s = String(val ?? "");
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+
+function downloadCsv(rows, filename) {
+  const csv = rows.map((row) => row.map(toCsvValue).join(",")).join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
+let toastIdSeq = 0;
+
+function Invoices({ business, appUser }) {
+  const [invoices, setInvoices] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingItem, setEditingItem] = useState(null);
-  const [form, setForm] = useState({
-    name: "",
-    sku: "",
-    category: "",
-    quantity: "",
-    unit_cost: "",
-    low_stock_threshold: DEFAULT_LOW_STOCK_THRESHOLD,
-  });
+  const [editingInvoice, setEditingInvoice] = useState(null);
+  const [form, setForm] = useState({ customer_id: "", status: "unpaid", due_date: "" });
+  const [lineItems, setLineItems] = useState([emptyLineItem()]);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [sendingId, setSendingId] = useState(null);
+  const [cooldownIds, setCooldownIds] = useState({});
+  const cooldownTimers = useRef({});
 
-  // Search / filter / sort
-  const [search, setSearch] = useState("");
-  const [lowStockOnly, setLowStockOnly] = useState(false);
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [sortKey, setSortKey] = useState("created_at");
+  // search / filter / sort
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortField, setSortField] = useState("created_at");
   const [sortDir, setSortDir] = useState("desc");
 
-  // Bulk selection
-  const [selected, setSelected] = useState(() => new Set());
+  // bulk selection
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
 
-  // Row-level quick-adjust in-flight state (for disabling buttons per row)
-  const [adjusting, setAdjusting] = useState(() => new Set());
-
-  // Import
+  // attachments
+  const [attachments, setAttachments] = useState([]);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [openingAttachmentId, setOpeningAttachmentId] = useState(null);
   const fileInputRef = useRef(null);
-  const [importing, setImporting] = useState(false);
-  const [importSummary, setImportSummary] = useState(null);
 
-  // Toast-ish inline banner for row changes (lightweight, non-blocking)
-  const [flashRowId, setFlashRowId] = useState(null);
+  // toasts
+  const [toasts, setToasts] = useState([]);
 
-  const fetchItems = useCallback(async () => {
+  const pushToast = useCallback((message, variant = "success") => {
+    const id = ++toastIdSeq;
+    setToasts((prev) => [...prev, { id, message, variant, leaving: false }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, leaving: true } : t)));
+    }, 3200);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3500);
+  }, []);
+
+  const fetchInvoices = useCallback(async () => {
     setLoading(true);
     const { data, error: fetchError } = await supabase
-      .from("inventory_items")
-      .select("*")
+      .from("invoices")
+      .select("*, customers(name, email), quotes(quote_number), invoice_attachments(id)")
       .eq("business_id", business.id)
       .order("created_at", { ascending: false });
 
-    if (!fetchError) setItems(data || []);
+    if (!fetchError) setInvoices(data || []);
     setLoading(false);
   }, [business.id]);
 
+  const fetchCustomers = useCallback(async () => {
+    const { data } = await supabase
+      .from("customers")
+      .select("id, name")
+      .eq("business_id", business.id)
+      .order("name", { ascending: true });
+    setCustomers(data || []);
+  }, [business.id]);
+
   useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+    fetchInvoices();
+    fetchCustomers();
+  }, [fetchInvoices, fetchCustomers]);
 
-  const openAddModal = () => {
-    setEditingItem(null);
-    setForm({
-      name: "",
-      sku: "",
-      category: "",
-      quantity: "",
-      unit_cost: "",
-      low_stock_threshold: DEFAULT_LOW_STOCK_THRESHOLD,
-    });
-    setError("");
-    setModalOpen(true);
-  };
-
-  const openEditModal = (item) => {
-    setEditingItem(item);
-    setForm({
-      name: item.name || "",
-      sku: item.sku || "",
-      category: item.category || "",
-      quantity: item.quantity,
-      unit_cost: item.unit_cost ?? "",
-      low_stock_threshold: item.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD,
-    });
-    setError("");
-    setModalOpen(true);
-  };
-
-  const closeModal = () => {
-    setModalOpen(false);
-    setEditingItem(null);
-  };
-
-  const handleSave = async (e) => {
-    e.preventDefault();
-    setError("");
-
-    if (!form.name.trim()) return setError("Enter an item name.");
-    if (form.quantity === "" || isNaN(Number(form.quantity)) || Number(form.quantity) < 0) {
-      return setError("Enter a valid quantity.");
-    }
-    if (
-      form.low_stock_threshold === "" ||
-      isNaN(Number(form.low_stock_threshold)) ||
-      Number(form.low_stock_threshold) < 0
-    ) {
-      return setError("Enter a valid low-stock threshold.");
-    }
-
-    setSaving(true);
-
-    const newQuantity = Number(form.quantity);
-    const threshold = Number(form.low_stock_threshold);
-    const payload = {
-      name: form.name,
-      sku: form.sku || null,
-      category: form.category.trim() || null,
-      quantity: newQuantity,
-      unit_cost: form.unit_cost === "" ? null : Number(form.unit_cost),
-      low_stock_threshold: threshold,
+  useEffect(() => {
+    const timers = cooldownTimers.current;
+    return () => {
+      Object.values(timers).forEach((t) => clearTimeout(t));
     };
+  }, []);
 
-    if (editingItem) {
-      const prevThreshold = Number(editingItem.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD);
-      const wasAboveThreshold = Number(editingItem.quantity) > prevThreshold;
-      const nowAtOrBelowThreshold = newQuantity <= threshold;
+  // ---------- filtering / sorting ----------
+  const filteredInvoices = useMemo(() => {
+    let rows = [...invoices];
+    const term = searchTerm.trim().toLowerCase();
 
-      const { error: updateError } = await supabase
-        .from("inventory_items")
-        .update(payload)
-        .eq("id", editingItem.id);
-
-      if (updateError) {
-        setSaving(false);
-        return setError(updateError.message);
-      }
-
-      // Only notify the moment stock crosses into low territory, not on
-      // every save while it stays low, to avoid spamming notifications.
-      if (wasAboveThreshold && nowAtOrBelowThreshold) {
-        notify(
-          business.id,
-          appUser?.id,
-          `"${form.name}" is running low (${newQuantity} left, threshold ${threshold}).`
+    if (term) {
+      rows = rows.filter((inv) => {
+        return (
+          inv.invoice_number?.toLowerCase().includes(term) ||
+          inv.customers?.name?.toLowerCase().includes(term) ||
+          inv.quotes?.quote_number?.toLowerCase().includes(term)
         );
-      }
-    } else {
-      const { error: insertError } = await supabase.from("inventory_items").insert({
-        business_id: business.id,
-        ...payload,
       });
-
-      if (insertError) {
-        setSaving(false);
-        return setError(insertError.message);
-      }
-
-      notify(business.id, appUser?.id, `New inventory item "${form.name}" was added.`);
-
-      if (newQuantity <= threshold) {
-        notify(
-          business.id,
-          appUser?.id,
-          `"${form.name}" is starting off low on stock (${newQuantity} left, threshold ${threshold}).`
-        );
-      }
     }
 
-    setSaving(false);
-    closeModal();
-    fetchItems();
-  };
-
-  const handleDelete = async (item) => {
-    if (!window.confirm(`Delete ${item.name}? This can't be undone.`)) return;
-
-    const { error: deleteError } = await supabase
-      .from("inventory_items")
-      .delete()
-      .eq("id", item.id);
-
-    if (!deleteError) fetchItems();
-  };
-
-  // ---------- Quick +/- stock adjust ----------
-  const quickAdjust = async (item, delta) => {
-    const nextQty = Number(item.quantity) + delta;
-    if (nextQty < 0) return;
-
-    setAdjusting((prev) => new Set(prev).add(item.id));
-
-    const threshold = Number(item.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD);
-    const wasAboveThreshold = Number(item.quantity) > threshold;
-    const nowAtOrBelowThreshold = nextQty <= threshold;
-
-    // Optimistic update
-    setItems((prev) =>
-      prev.map((it) => (it.id === item.id ? { ...it, quantity: nextQty } : it))
-    );
-    setFlashRowId(item.id);
-    window.setTimeout(() => setFlashRowId((id) => (id === item.id ? null : id)), 500);
-
-    const { error: updateError } = await supabase
-      .from("inventory_items")
-      .update({ quantity: nextQty })
-      .eq("id", item.id);
-
-    if (updateError) {
-      // revert on failure
-      setItems((prev) =>
-        prev.map((it) => (it.id === item.id ? { ...it, quantity: item.quantity } : it))
-      );
-    } else if (wasAboveThreshold && nowAtOrBelowThreshold) {
-      notify(
-        business.id,
-        appUser?.id,
-        `"${item.name}" is running low (${nextQty} left, threshold ${threshold}).`
-      );
+    if (statusFilter !== "all") {
+      rows = rows.filter((inv) => inv.status === statusFilter);
     }
 
-    setAdjusting((prev) => {
-      const next = new Set(prev);
-      next.delete(item.id);
-      return next;
-    });
-  };
+    if (dateFrom) {
+      rows = rows.filter((inv) => inv.due_date && inv.due_date >= dateFrom);
+    }
+    if (dateTo) {
+      rows = rows.filter((inv) => inv.due_date && inv.due_date <= dateTo);
+    }
 
-  // ---------- Derived: categories, filtering, sorting ----------
-  const categories = useMemo(() => {
-    const set = new Set();
-    items.forEach((it) => set.add(it.category?.trim() || UNCATEGORIZED));
-    return Array.from(set).sort((a, b) => a.localeCompare(b));
-  }, [items]);
-
-  const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    let result = items.filter((it) => {
-      const threshold = Number(it.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD);
-      const isLow = Number(it.quantity) <= threshold;
-      const itemCategory = it.category?.trim() || UNCATEGORIZED;
-
-      if (lowStockOnly && !isLow) return false;
-      if (categoryFilter !== "all" && itemCategory !== categoryFilter) return false;
-      if (q) {
-        const inName = it.name?.toLowerCase().includes(q);
-        const inSku = it.sku?.toLowerCase().includes(q);
-        if (!inName && !inSku) return false;
-      }
-      return true;
-    });
-
-    const dir = sortDir === "asc" ? 1 : -1;
-    result = [...result].sort((a, b) => {
+    rows.sort((a, b) => {
       let av, bv;
-      switch (sortKey) {
-        case "name":
-          av = (a.name || "").toLowerCase();
-          bv = (b.name || "").toLowerCase();
+      switch (sortField) {
+        case "invoice_number":
+          av = a.invoice_number || "";
+          bv = b.invoice_number || "";
           break;
-        case "quantity":
-          av = Number(a.quantity);
-          bv = Number(b.quantity);
+        case "customer":
+          av = a.customers?.name || "";
+          bv = b.customers?.name || "";
           break;
-        case "unit_cost":
-          av = a.unit_cost != null ? Number(a.unit_cost) : -1;
-          bv = b.unit_cost != null ? Number(b.unit_cost) : -1;
+        case "status":
+          av = a.status || "";
+          bv = b.status || "";
           break;
-        case "category":
-          av = (a.category || UNCATEGORIZED).toLowerCase();
-          bv = (b.category || UNCATEGORIZED).toLowerCase();
+        case "due_date":
+          av = a.due_date || "";
+          bv = b.due_date || "";
+          break;
+        case "total":
+          av = Number(a.total) || 0;
+          bv = Number(b.total) || 0;
           break;
         default:
-          av = a.created_at;
-          bv = b.created_at;
+          av = a.created_at || "";
+          bv = b.created_at || "";
       }
-      if (av < bv) return -1 * dir;
-      if (av > bv) return 1 * dir;
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
       return 0;
     });
 
-    return result;
-  }, [items, search, lowStockOnly, categoryFilter, sortKey, sortDir]);
+    return rows;
+  }, [invoices, searchTerm, statusFilter, dateFrom, dateTo, sortField, sortDir]);
 
-  const toggleSort = (key) => {
-    if (sortKey === key) {
+  const hasActiveFilters =
+    searchTerm || statusFilter !== "all" || dateFrom || dateTo;
+
+  const clearFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("all");
+    setDateFrom("");
+    setDateTo("");
+  };
+
+  const toggleSort = (field) => {
+    if (sortField === field) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
-      setSortKey(key);
+      setSortField(field);
       setSortDir("asc");
     }
   };
 
-  // ---------- Stats ----------
-  const stats = useMemo(() => {
-    const totalItems = items.length;
-    const totalValue = items.reduce(
-      (sum, it) => sum + Number(it.quantity || 0) * Number(it.unit_cost || 0),
-      0
-    );
-    const lowCount = items.filter(
-      (it) => Number(it.quantity) <= Number(it.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD)
-    ).length;
-    return { totalItems, totalValue, lowCount };
-  }, [items]);
+  const sortArrow = (field) =>
+    sortField === field ? (sortDir === "asc" ? "▲" : "▼") : "";
 
-  // ---------- Bulk selection ----------
+  // ---------- stats ----------
+  const stats = useMemo(() => {
+    const total = invoices.reduce((s, i) => s + Number(i.total || 0), 0);
+    const outstanding = invoices
+      .filter((i) => i.status !== "paid")
+      .reduce((s, i) => s + Number(i.total || 0), 0);
+    const overdue = invoices.filter(
+      (i) => i.status !== "paid" && isPastDue(i.due_date)
+    );
+    const overdueTotal = overdue.reduce((s, i) => s + Number(i.total || 0), 0);
+    const paidCount = invoices.filter((i) => i.status === "paid").length;
+    return {
+      total,
+      outstanding,
+      overdueCount: overdue.length,
+      overdueTotal,
+      paidCount,
+      totalCount: invoices.length,
+    };
+  }, [invoices]);
+
+  // ---------- selection ----------
   const allVisibleSelected =
-    filteredItems.length > 0 && filteredItems.every((it) => selected.has(it.id));
+    filteredInvoices.length > 0 &&
+    filteredInvoices.every((inv) => selectedIds.has(inv.id));
 
   const toggleSelectAll = () => {
-    setSelected((prev) => {
+    setSelectedIds((prev) => {
       if (allVisibleSelected) {
         const next = new Set(prev);
-        filteredItems.forEach((it) => next.delete(it.id));
+        filteredInvoices.forEach((inv) => next.delete(inv.id));
         return next;
       }
       const next = new Set(prev);
-      filteredItems.forEach((it) => next.add(it.id));
+      filteredInvoices.forEach((inv) => next.add(inv.id));
       return next;
     });
   };
 
-  const toggleSelectRow = (id) => {
-    setSelected((prev) => {
+  const toggleSelectOne = (id) => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -332,279 +266,623 @@ function Inventory({ business, appUser }) {
     });
   };
 
-  const clearSelection = () => setSelected(new Set());
+  const clearSelection = () => setSelectedIds(new Set());
 
-  const bulkDelete = async () => {
-    const ids = Array.from(selected);
-    if (ids.length === 0) return;
-    if (!window.confirm(`Delete ${ids.length} item${ids.length > 1 ? "s" : ""}? This can't be undone.`))
-      return;
+  // ---------- modal ----------
+  const openAddModal = () => {
+    setEditingInvoice(null);
+    setForm({ customer_id: "", status: "unpaid", due_date: "" });
+    setLineItems([emptyLineItem()]);
+    setAttachments([]);
+    setError("");
+    setModalOpen(true);
+  };
 
-    const { error: deleteError } = await supabase.from("inventory_items").delete().in("id", ids);
-    if (!deleteError) {
-      clearSelection();
-      fetchItems();
+  const openEditModal = async (invoice) => {
+    setEditingInvoice(invoice);
+    setForm({
+      customer_id: invoice.customer_id || "",
+      status: invoice.status,
+      due_date: invoice.due_date || "",
+    });
+    setError("");
+
+    const { data: items } = await supabase
+      .from("invoice_line_items")
+      .select("*")
+      .eq("invoice_id", invoice.id);
+
+    setLineItems(
+      items && items.length > 0
+        ? items.map((i) => ({
+            id: i.id,
+            description: i.description,
+            quantity: i.quantity,
+            unit_price: i.unit_price,
+          }))
+        : [emptyLineItem()]
+    );
+
+    const { data: files } = await supabase
+      .from("invoice_attachments")
+      .select("*")
+      .eq("invoice_id", invoice.id)
+      .order("uploaded_at", { ascending: false });
+    setAttachments(files || []);
+
+    setModalOpen(true);
+  };
+
+  const closeModal = () => {
+    setModalOpen(false);
+    setEditingInvoice(null);
+    setAttachments([]);
+  };
+
+  const updateLineItem = (index, field, value) => {
+    setLineItems((prev) =>
+      prev.map((item, i) => (i === index ? { ...item, [field]: value } : item))
+    );
+  };
+
+  const addLineItem = () => setLineItems((prev) => [...prev, emptyLineItem()]);
+
+  const removeLineItem = (index) => {
+    setLineItems((prev) => (prev.length === 1 ? prev : prev.filter((_, i) => i !== index)));
+  };
+
+  const handleSave = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    if (!form.customer_id) return setError("Please select a customer.");
+    if (lineItems.every((i) => !i.description.trim())) {
+      return setError("Add at least one line item.");
     }
-  };
 
-  const bulkSetThreshold = async () => {
-    const ids = Array.from(selected);
-    if (ids.length === 0) return;
-    const value = window.prompt("Set low-stock threshold for selected items:", "5");
-    if (value === null) return;
-    const threshold = Number(value);
-    if (isNaN(threshold) || threshold < 0) {
-      window.alert("Enter a valid, non-negative number.");
-      return;
-    }
+    setSaving(true);
+    const total = calcTotal(lineItems);
+    const cleanItems = lineItems.filter((i) => i.description.trim());
 
-    const { error: updateError } = await supabase
-      .from("inventory_items")
-      .update({ low_stock_threshold: threshold })
-      .in("id", ids);
+    if (editingInvoice) {
+      const { error: updateError } = await supabase
+        .from("invoices")
+        .update({
+          customer_id: form.customer_id,
+          status: form.status,
+          due_date: form.due_date || null,
+          total,
+        })
+        .eq("id", editingInvoice.id);
 
-    if (!updateError) {
-      clearSelection();
-      fetchItems();
-    }
-  };
-
-  const exportRows = (rows, filenamePrefix) => {
-    const data = rows.map((it) => ({
-      Name: it.name,
-      SKU: it.sku || "",
-      Category: it.category || "",
-      Quantity: Number(it.quantity),
-      "Low-stock threshold": Number(it.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD),
-      "Unit cost": it.unit_cost != null ? Number(it.unit_cost) : "",
-    }));
-    const worksheet = XLSX.utils.json_to_sheet(data);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory");
-    const stamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(workbook, `${filenamePrefix}-${stamp}.xlsx`);
-  };
-
-  const bulkExport = () => {
-    const ids = selected;
-    const rows = items.filter((it) => ids.has(it.id));
-    if (rows.length === 0) return;
-    exportRows(rows, "inventory-selection");
-  };
-
-  const exportAll = () => {
-    if (filteredItems.length === 0) return;
-    exportRows(filteredItems, "inventory");
-  };
-
-  // ---------- Bulk import ----------
-  const triggerImport = () => fileInputRef.current?.click();
-
-  const handleImportFile = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-
-    setImporting(true);
-    setImportSummary(null);
-
-    try {
-      const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: "array" });
-      const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-
-      const toInsert = [];
-      let skipped = 0;
-
-      rows.forEach((row) => {
-        const name = String(row.Name ?? row.name ?? "").trim();
-        const quantityRaw = row.Quantity ?? row.quantity ?? row.Qty ?? row.qty;
-        const quantity = Number(quantityRaw);
-
-        if (!name || isNaN(quantity) || quantity < 0) {
-          skipped += 1;
-          return;
-        }
-
-        const thresholdRaw =
-          row["Low-stock threshold"] ?? row.low_stock_threshold ?? row.Threshold ?? row.threshold;
-        const threshold = thresholdRaw !== "" && !isNaN(Number(thresholdRaw))
-          ? Number(thresholdRaw)
-          : DEFAULT_LOW_STOCK_THRESHOLD;
-
-        const unitCostRaw = row["Unit cost"] ?? row.unit_cost ?? row.Cost ?? row.cost;
-        const unitCost = unitCostRaw !== "" && !isNaN(Number(unitCostRaw)) ? Number(unitCostRaw) : null;
-
-        toInsert.push({
-          business_id: business.id,
-          name,
-          sku: String(row.SKU ?? row.sku ?? "").trim() || null,
-          category: String(row.Category ?? row.category ?? "").trim() || null,
-          quantity,
-          unit_cost: unitCost,
-          low_stock_threshold: threshold,
-        });
-      });
-
-      if (toInsert.length === 0) {
-        setImportSummary({ ok: 0, skipped, error: "No valid rows found. Check the Name and Quantity columns." });
-        setImporting(false);
-        return;
+      if (updateError) {
+        setSaving(false);
+        return setError(updateError.message);
       }
 
-      const { error: insertError } = await supabase.from("inventory_items").insert(toInsert);
+      await supabase.from("invoice_line_items").delete().eq("invoice_id", editingInvoice.id);
+
+      const { error: itemsError } = await supabase.from("invoice_line_items").insert(
+        cleanItems.map((i) => ({
+          invoice_id: editingInvoice.id,
+          description: i.description,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        }))
+      );
+
+      if (itemsError) {
+        setSaving(false);
+        return setError(itemsError.message);
+      }
+      pushToast(`Invoice ${editingInvoice.invoice_number} updated.`);
+    } else {
+      let invoiceNumber;
+      try {
+        invoiceNumber = await generateNumber(business.id, "invoice");
+      } catch (numError) {
+        setSaving(false);
+        return setError(numError.message);
+      }
+
+      const { data: inserted, error: insertError } = await supabase
+        .from("invoices")
+        .insert({
+          business_id: business.id,
+          customer_id: form.customer_id,
+          quote_id: null,
+          invoice_number: invoiceNumber,
+          status: form.status,
+          due_date: form.due_date || null,
+          total,
+        })
+        .select()
+        .single();
 
       if (insertError) {
-        setImportSummary({ ok: 0, skipped, error: insertError.message });
-      } else {
-        setImportSummary({ ok: toInsert.length, skipped, error: null });
-        notify(
-          business.id,
-          appUser?.id,
-          `Imported ${toInsert.length} inventory item${toInsert.length > 1 ? "s" : ""} from file.`
-        );
-        fetchItems();
+        setSaving(false);
+        return setError(insertError.message);
       }
-    } catch (err) {
-      setImportSummary({ ok: 0, skipped: 0, error: "Couldn't read that file. Use a .csv or .xlsx export." });
+
+      const { error: itemsError } = await supabase.from("invoice_line_items").insert(
+        cleanItems.map((i) => ({
+          invoice_id: inserted.id,
+          description: i.description,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        }))
+      );
+
+      if (itemsError) {
+        setSaving(false);
+        return setError(itemsError.message);
+      }
+
+      notify(business.id, appUser?.id, `Invoice ${invoiceNumber} was created.`);
+      pushToast(`Invoice ${invoiceNumber} created.`);
     }
 
-    setImporting(false);
+    setSaving(false);
+    closeModal();
+    fetchInvoices();
   };
 
-  const sortIndicator = (key) => {
-    if (sortKey !== key) return null;
-    return <span className={`inven-sort-arrow ${sortDir}`}>▲</span>;
+  const handleDelete = async (invoice) => {
+    if (!window.confirm(`Delete invoice ${invoice.invoice_number}? This can't be undone.`)) return;
+    const { error: deleteError } = await supabase.from("invoices").delete().eq("id", invoice.id);
+    if (!deleteError) {
+      notify(business.id, appUser?.id, `Invoice ${invoice.invoice_number} was deleted.`);
+      pushToast(`Invoice ${invoice.invoice_number} deleted.`);
+      clearSelection();
+      fetchInvoices();
+    } else {
+      pushToast(`Failed to delete: ${deleteError.message}`, "error");
+    }
   };
 
-  const hasActiveFilters = search.trim() || lowStockOnly || categoryFilter !== "all";
+  const handleMarkPaid = async (invoice) => {
+    const { error: updateError } = await supabase
+      .from("invoices")
+      .update({ status: "paid" })
+      .eq("id", invoice.id);
+    if (!updateError) {
+      notify(business.id, appUser?.id, `Invoice ${invoice.invoice_number} was marked as paid.`);
+      pushToast(`Invoice ${invoice.invoice_number} marked as paid.`);
+      fetchInvoices();
+    } else {
+      pushToast(`Failed: ${updateError.message}`, "error");
+    }
+  };
+
+  const handleDownload = async (invoice) => {
+    const { data: items } = await supabase
+      .from("invoice_line_items")
+      .select("*")
+      .eq("invoice_id", invoice.id);
+
+    const customer = customers.find((c) => c.id === invoice.customer_id);
+    const doc = generateInvoicePdf(invoice, customer, items || [], business);
+    downloadPdf(doc, `invoice-${invoice.invoice_number}.pdf`);
+  };
+
+  const startCooldown = (id) => {
+    setCooldownIds((prev) => ({ ...prev, [id]: true }));
+    cooldownTimers.current[id] = setTimeout(() => {
+      setCooldownIds((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+      delete cooldownTimers.current[id];
+    }, SEND_COOLDOWN_MS);
+  };
+
+  const handleSend = async (invoice) => {
+    if (sendingId === invoice.id || cooldownIds[invoice.id]) return;
+
+    const { data: fullCustomer } = await supabase
+      .from("customers")
+      .select("name, email")
+      .eq("id", invoice.customer_id)
+      .single();
+
+    if (!fullCustomer?.email) {
+      window.alert("This customer has no email address on file.");
+      return;
+    }
+
+    setSendingId(invoice.id);
+
+    try {
+      const { data: items } = await supabase
+        .from("invoice_line_items")
+        .select("*")
+        .eq("invoice_id", invoice.id);
+
+      const doc = generateInvoicePdf(invoice, fullCustomer, items || [], business);
+      const pdfBase64 = pdfToBase64(doc);
+
+      await sendDocumentEmail({
+        type: "invoice",
+        number: invoice.invoice_number,
+        toEmail: fullCustomer.email,
+        toName: fullCustomer.name,
+        pdfBase64,
+        businessName: business.name,
+        publicToken: invoice.public_token,
+      });
+
+      notify(business.id, appUser?.id, `Invoice ${invoice.invoice_number} was emailed to ${fullCustomer.name}.`);
+      pushToast(`Invoice ${invoice.invoice_number} sent to ${fullCustomer.name}.`);
+    } catch (err) {
+      pushToast(`Failed to send: ${err.message}`, "error");
+    } finally {
+      setSendingId(null);
+      startCooldown(invoice.id);
+    }
+  };
+
+  // ---------- duplicate ----------
+  const handleDuplicate = async (invoice) => {
+    const { data: items } = await supabase
+      .from("invoice_line_items")
+      .select("*")
+      .eq("invoice_id", invoice.id);
+
+    let invoiceNumber;
+    try {
+      invoiceNumber = await generateNumber(business.id, "invoice");
+    } catch (numError) {
+      pushToast(`Couldn't duplicate: ${numError.message}`, "error");
+      return;
+    }
+
+    const { data: inserted, error: insertError } = await supabase
+      .from("invoices")
+      .insert({
+        business_id: business.id,
+        customer_id: invoice.customer_id,
+        quote_id: null,
+        invoice_number: invoiceNumber,
+        status: "unpaid",
+        due_date: null,
+        total: invoice.total,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      pushToast(`Couldn't duplicate: ${insertError.message}`, "error");
+      return;
+    }
+
+    if (items && items.length > 0) {
+      const { error: itemsError } = await supabase.from("invoice_line_items").insert(
+        items.map((i) => ({
+          invoice_id: inserted.id,
+          description: i.description,
+          quantity: i.quantity,
+          unit_price: i.unit_price,
+        }))
+      );
+      if (itemsError) {
+        pushToast(`Duplicated, but line items failed: ${itemsError.message}`, "error");
+        fetchInvoices();
+        return;
+      }
+    }
+
+    pushToast(`Duplicated as ${invoiceNumber} (draft, unpaid).`);
+    notify(business.id, appUser?.id, `Invoice ${invoiceNumber} was created as a duplicate of ${invoice.invoice_number}.`);
+    fetchInvoices();
+  };
+
+  // ---------- attachments ----------
+  const handleUploadAttachment = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingInvoice) return;
+
+    setUploadingAttachment(true);
+    const path = `${business.id}/${editingInvoice.id}/${Date.now()}-${file.name}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(ATTACHMENT_BUCKET)
+      .upload(path, file);
+
+    if (uploadError) {
+      pushToast(`Upload failed: ${uploadError.message}`, "error");
+      setUploadingAttachment(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    const { data: row, error: insertError } = await supabase
+      .from("invoice_attachments")
+      .insert({
+        invoice_id: editingInvoice.id,
+        file_name: file.name,
+        file_path: path,
+      })
+      .select()
+      .single();
+
+    if (insertError) {
+      pushToast(`Upload saved but record failed: ${insertError.message}`, "error");
+    } else {
+      setAttachments((prev) => [row, ...prev]);
+      pushToast("Attachment uploaded.");
+    }
+
+    setUploadingAttachment(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  // Private bucket now — files must be accessed via short-lived signed
+  // URLs (fetched on demand) rather than a permanent public URL, so
+  // attachments stay scoped to the business's own RLS policies.
+  const openAttachment = async (attachment) => {
+    setOpeningAttachmentId(attachment.id);
+
+    const { data, error: signError } = await supabase.storage
+      .from(ATTACHMENT_BUCKET)
+      .createSignedUrl(attachment.file_path, 300); // 5 min, matches Documents.js
+
+    setOpeningAttachmentId(null);
+
+    if (signError || !data?.signedUrl) {
+      pushToast(`Couldn't open attachment: ${signError?.message || "unknown error"}`, "error");
+      return;
+    }
+
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
+
+  const handleRemoveAttachment = async (attachment) => {
+    if (!window.confirm(`Remove ${attachment.file_name}?`)) return;
+    await supabase.storage.from(ATTACHMENT_BUCKET).remove([attachment.file_path]);
+    const { error: deleteError } = await supabase
+      .from("invoice_attachments")
+      .delete()
+      .eq("id", attachment.id);
+    if (!deleteError) {
+      setAttachments((prev) => prev.filter((a) => a.id !== attachment.id));
+      pushToast("Attachment removed.");
+    }
+  };
+
+  // ---------- bulk actions ----------
+  const selectedInvoices = useMemo(
+    () => invoices.filter((inv) => selectedIds.has(inv.id)),
+    [invoices, selectedIds]
+  );
+
+  const handleBulkMarkPaid = async () => {
+    setBulkBusy(true);
+    const ids = Array.from(selectedIds);
+    const { error: updateError } = await supabase
+      .from("invoices")
+      .update({ status: "paid" })
+      .in("id", ids);
+    setBulkBusy(false);
+    if (!updateError) {
+      pushToast(`${ids.length} invoice${ids.length === 1 ? "" : "s"} marked as paid.`);
+      notify(business.id, appUser?.id, `${ids.length} invoices were marked as paid.`);
+      clearSelection();
+      fetchInvoices();
+    } else {
+      pushToast(`Bulk update failed: ${updateError.message}`, "error");
+    }
+  };
+
+  const handleBulkExport = () => {
+    const rows = [
+      ["Invoice #", "Quote #", "Customer", "Status", "Due Date", "Total"],
+      ...selectedInvoices.map((inv) => [
+        inv.invoice_number,
+        inv.quotes?.quote_number || "",
+        inv.customers?.name || "",
+        inv.status,
+        inv.due_date || "",
+        Number(inv.total).toFixed(2),
+      ]),
+    ];
+    downloadCsv(rows, `invoices-export-${new Date().toISOString().slice(0, 10)}.csv`);
+    pushToast(`Exported ${selectedInvoices.length} invoice${selectedInvoices.length === 1 ? "" : "s"}.`);
+  };
+
+  const handleBulkSend = async () => {
+    setBulkBusy(true);
+    let sent = 0;
+    let failed = 0;
+
+    for (const invoice of selectedInvoices) {
+      if (cooldownIds[invoice.id]) continue;
+      const { data: fullCustomer } = await supabase
+        .from("customers")
+        .select("name, email")
+        .eq("id", invoice.customer_id)
+        .single();
+
+      if (!fullCustomer?.email) {
+        failed++;
+        continue;
+      }
+
+      try {
+        const { data: items } = await supabase
+          .from("invoice_line_items")
+          .select("*")
+          .eq("invoice_id", invoice.id);
+        const doc = generateInvoicePdf(invoice, fullCustomer, items || [], business);
+        const pdfBase64 = pdfToBase64(doc);
+        await sendDocumentEmail({
+          type: "invoice",
+          number: invoice.invoice_number,
+          toEmail: fullCustomer.email,
+          toName: fullCustomer.name,
+          pdfBase64,
+          businessName: business.name,
+          publicToken: invoice.public_token,
+        });
+        sent++;
+        startCooldown(invoice.id);
+      } catch {
+        failed++;
+      }
+    }
+
+    setBulkBusy(false);
+    pushToast(
+      `Sent ${sent} invoice${sent === 1 ? "" : "s"}${failed ? `, ${failed} failed` : ""}.`,
+      failed ? "error" : "success"
+    );
+    clearSelection();
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (!window.confirm(`Delete ${ids.length} invoice${ids.length === 1 ? "" : "s"}? This can't be undone.`)) return;
+    setBulkBusy(true);
+    const { error: deleteError } = await supabase.from("invoices").delete().in("id", ids);
+    setBulkBusy(false);
+    if (!deleteError) {
+      pushToast(`${ids.length} invoice${ids.length === 1 ? "" : "s"} deleted.`);
+      notify(business.id, appUser?.id, `${ids.length} invoices were deleted.`);
+      clearSelection();
+      fetchInvoices();
+    } else {
+      pushToast(`Bulk delete failed: ${deleteError.message}`, "error");
+    }
+  };
+
+  const modalTotal = calcTotal(lineItems);
+
+  const sendLabel = (id) => {
+    if (sendingId === id) return "Sending...";
+    if (cooldownIds[id]) return "Sent";
+    return "Send";
+  };
 
   return (
-    <div className="inven-page">
+    <div className="inv-page">
       <AppNav business={business} />
 
-      <div className="inven-body">
-        <div className="inven-header">
+      <div className="inv-body">
+        <div className="inv-header">
           <div>
-            <p className="inven-eyebrow">Inventory</p>
-            <h1 className="inven-heading">Your stock</h1>
+            <p className="inv-eyebrow">Invoices</p>
+            <h1 className="inv-heading">Your invoices</h1>
           </div>
-          <div className="inven-header-actions">
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              className="inven-hidden-input"
-              onChange={handleImportFile}
-            />
-            <button className="inven-secondary-btn" onClick={triggerImport} disabled={importing}>
-              {importing ? "Importing..." : "Import file"}
-            </button>
-            <button className="inven-secondary-btn" onClick={exportAll} disabled={filteredItems.length === 0}>
-              Export
-            </button>
-            <button className="inven-add-btn" onClick={openAddModal}>
-              + Add item
-            </button>
-          </div>
+          <button
+            className="inv-add-btn"
+            onClick={openAddModal}
+            disabled={customers.length === 0}
+            title={customers.length === 0 ? "Add a customer first" : ""}
+          >
+            + New invoice
+          </button>
         </div>
 
-        {importSummary && (
-          <div className={`inven-import-banner ${importSummary.error ? "inven-import-banner--error" : ""}`}>
-            {importSummary.error
-              ? importSummary.error
-              : `Imported ${importSummary.ok} item${importSummary.ok !== 1 ? "s" : ""}${
-                  importSummary.skipped ? `, skipped ${importSummary.skipped} invalid row${importSummary.skipped !== 1 ? "s" : ""}` : ""
-                }.`}
-            <button className="inven-banner-dismiss" onClick={() => setImportSummary(null)}>
-              ×
-            </button>
+        {customers.length === 0 && (
+          <div className="inv-empty" style={{ marginBottom: 24 }}>
+            You need at least one customer before creating an invoice.
           </div>
         )}
 
-        <div className="inven-stats">
-          <div className="inven-stat-card">
-            <p className="inven-stat-label">Items tracked</p>
-            <p className="inven-stat-value">{stats.totalItems}</p>
+        {!loading && invoices.length > 0 && (
+          <div className="inv-stats">
+            <div className="inv-stat-card inv-stat-card--total">
+              <p className="inv-stat-label">Total invoiced</p>
+              <p className="inv-stat-value">R{stats.total.toFixed(2)}</p>
+              <p className="inv-stat-sub">{stats.totalCount} invoices</p>
+            </div>
+            <div className="inv-stat-card inv-stat-card--outstanding">
+              <p className="inv-stat-label">Outstanding</p>
+              <p className="inv-stat-value">R{stats.outstanding.toFixed(2)}</p>
+              <p className="inv-stat-sub">Unpaid + overdue</p>
+            </div>
+            <div className="inv-stat-card inv-stat-card--overdue">
+              <p className="inv-stat-label">Overdue</p>
+              <p className="inv-stat-value">R{stats.overdueTotal.toFixed(2)}</p>
+              <p className="inv-stat-sub">{stats.overdueCount} invoices</p>
+            </div>
+            <div className="inv-stat-card inv-stat-card--paid">
+              <p className="inv-stat-label">Paid</p>
+              <p className="inv-stat-value">{stats.paidCount}</p>
+              <p className="inv-stat-sub">of {stats.totalCount} invoices</p>
+            </div>
           </div>
-          <div className="inven-stat-card">
-            <p className="inven-stat-label">Stock value</p>
-            <p className="inven-stat-value">R{stats.totalValue.toFixed(2)}</p>
-          </div>
-          <div className={`inven-stat-card ${stats.lowCount > 0 ? "inven-stat-card--warn" : ""}`}>
-            <p className="inven-stat-label">Low stock</p>
-            <p className="inven-stat-value">{stats.lowCount}</p>
-          </div>
-        </div>
+        )}
 
-        <div className="inven-toolbar">
-          <div className="inven-search-wrap">
-            <svg className="inven-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-              <path d="M21 21l-4.35-4.35" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            <input
-              className="inven-search-input"
-              placeholder="Search by name or SKU..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          <select
-            className="inven-select"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-          >
-            <option value="all">All categories</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-
-          <label className="inven-toggle">
-            <input
-              type="checkbox"
-              checked={lowStockOnly}
-              onChange={(e) => setLowStockOnly(e.target.checked)}
-            />
-            <span className="inven-toggle-track">
-              <span className="inven-toggle-thumb" />
-            </span>
-            Low stock only
-          </label>
-
-          {hasActiveFilters && (
-            <button
-              className="inven-clear-filters"
-              onClick={() => {
-                setSearch("");
-                setLowStockOnly(false);
-                setCategoryFilter("all");
-              }}
+        {!loading && invoices.length > 0 && (
+          <div className="inv-toolbar">
+            <div className="inv-search-wrap">
+              <span className="inv-search-icon">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+              </span>
+              <input
+                className="inv-search-input"
+                placeholder="Search invoice #, customer, quote #..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+            </div>
+            <select
+              className="inv-filter-select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
             >
-              Clear filters
-            </button>
-          )}
-        </div>
+              <option value="all">All statuses</option>
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s.charAt(0).toUpperCase() + s.slice(1)}
+                </option>
+              ))}
+            </select>
+            <input
+              className="inv-filter-select"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              title="Due date from"
+            />
+            <input
+              className="inv-filter-select"
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              title="Due date to"
+            />
+            {hasActiveFilters && (
+              <button className="inv-clear-filters" onClick={clearFilters}>
+                Clear filters
+              </button>
+            )}
+          </div>
+        )}
 
-        {selected.size > 0 && (
-          <div className="inven-bulkbar">
-            <span className="inven-bulkbar-count">{selected.size} selected</span>
-            <div className="inven-bulkbar-actions">
-              <button className="inven-action-btn" onClick={bulkSetThreshold}>
-                Set threshold
+        {selectedIds.size > 0 && (
+          <div className="inv-bulk-bar">
+            <span className="inv-bulk-count">
+              {selectedIds.size} selected
+            </span>
+            <div className="inv-bulk-actions">
+              <button className="inv-bulk-btn" onClick={handleBulkMarkPaid} disabled={bulkBusy}>
+                Mark paid
               </button>
-              <button className="inven-action-btn" onClick={bulkExport}>
-                Export selected
+              <button className="inv-bulk-btn" onClick={handleBulkSend} disabled={bulkBusy}>
+                Send
               </button>
-              <button className="inven-action-btn inven-action-btn--danger" onClick={bulkDelete}>
+              <button className="inv-bulk-btn" onClick={handleBulkExport} disabled={bulkBusy}>
+                Export CSV
+              </button>
+              <button className="inv-bulk-btn inv-bulk-btn--danger" onClick={handleBulkDelete} disabled={bulkBusy}>
                 Delete
               </button>
-              <button className="inven-action-btn" onClick={clearSelection}>
+              <button className="inv-bulk-btn" onClick={clearSelection} disabled={bulkBusy}>
                 Clear
               </button>
             </div>
@@ -612,124 +890,130 @@ function Inventory({ business, appUser }) {
         )}
 
         {loading ? (
-          <div className="inven-skeleton">
-            {[0, 1, 2, 3].map((i) => (
-              <div className="inven-skeleton-row" key={i} style={{ animationDelay: `${i * 0.06}s` }} />
-            ))}
+          <p className="inv-muted">Loading...</p>
+        ) : invoices.length === 0 ? (
+          <div className="inv-empty">
+            No invoices yet. Create one directly or convert an accepted quote.
           </div>
-        ) : items.length === 0 ? (
-          <div className="inven-empty">
-            <p>No inventory items yet.</p>
-            <p className="inven-empty-sub">Add your first item, or import a spreadsheet to get started.</p>
-          </div>
-        ) : filteredItems.length === 0 ? (
-          <div className="inven-empty">
-            <p>No items match your filters.</p>
-            <button className="inven-clear-filters" onClick={() => {
-              setSearch("");
-              setLowStockOnly(false);
-              setCategoryFilter("all");
-            }}>
-              Clear filters
-            </button>
+        ) : filteredInvoices.length === 0 ? (
+          <div className="inv-empty">
+            No invoices match your filters.
           </div>
         ) : (
-          <div className="inven-table-wrap">
-            <table className="inven-table">
+          <div className="inv-table-wrap">
+            <table className="inv-table">
               <thead>
                 <tr>
-                  <th className="inven-th-check">
+                  <th className="inv-th-checkbox">
                     <input
                       type="checkbox"
+                      className="inv-checkbox"
                       checked={allVisibleSelected}
                       onChange={toggleSelectAll}
-                      aria-label="Select all"
                     />
                   </th>
-                  <th className="inven-th-sortable" onClick={() => toggleSort("name")}>
-                    Name {sortIndicator("name")}
+                  <th className="inv-th-sortable" onClick={() => toggleSort("invoice_number")}>
+                    Invoice # <span className="inv-sort-arrow">{sortArrow("invoice_number")}</span>
                   </th>
-                  <th>SKU</th>
-                  <th className="inven-th-sortable" onClick={() => toggleSort("category")}>
-                    Category {sortIndicator("category")}
+                  <th>Quote #</th>
+                  <th className="inv-th-sortable" onClick={() => toggleSort("customer")}>
+                    Customer <span className="inv-sort-arrow">{sortArrow("customer")}</span>
                   </th>
-                  <th className="inven-th-sortable" onClick={() => toggleSort("quantity")}>
-                    Quantity {sortIndicator("quantity")}
+                  <th className="inv-th-sortable" onClick={() => toggleSort("status")}>
+                    Status <span className="inv-sort-arrow">{sortArrow("status")}</span>
                   </th>
-                  <th>Low-stock at</th>
-                  <th className="inven-th-sortable" onClick={() => toggleSort("unit_cost")}>
-                    Unit cost {sortIndicator("unit_cost")}
+                  <th className="inv-th-sortable" onClick={() => toggleSort("due_date")}>
+                    Due date <span className="inv-sort-arrow">{sortArrow("due_date")}</span>
+                  </th>
+                  <th className="inv-th-sortable" onClick={() => toggleSort("total")}>
+                    Total <span className="inv-sort-arrow">{sortArrow("total")}</span>
                   </th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {filteredItems.map((it, idx) => {
-                  const threshold = Number(it.low_stock_threshold ?? DEFAULT_LOW_STOCK_THRESHOLD);
-                  const isLow = Number(it.quantity) <= threshold;
-                  const isAdjusting = adjusting.has(it.id);
-                  return (
-                    <tr
-                      key={it.id}
-                      className={`inven-row ${flashRowId === it.id ? "inven-row--flash" : ""}`}
-                      style={{ animationDelay: `${Math.min(idx, 12) * 0.03}s` }}
+                {filteredInvoices.map((inv, idx) => (
+                  <tr
+                    key={inv.id}
+                    className={selectedIds.has(inv.id) ? "inv-row-selected" : ""}
+                    style={{ animationDelay: `${Math.min(idx * 0.02, 0.3)}s` }}
+                  >
+                    <td>
+                      <input
+                        type="checkbox"
+                        className="inv-checkbox"
+                        checked={selectedIds.has(inv.id)}
+                        onChange={() => toggleSelectOne(inv.id)}
+                      />
+                    </td>
+                    <td className="inv-name-cell">
+                      {inv.invoice_number}
+                      {inv.invoice_attachments?.length > 0 && (
+                        <span className="inv-attach-badge" title={`${inv.invoice_attachments.length} attachment(s)`}>
+                          📎{inv.invoice_attachments.length}
+                        </span>
+                      )}
+                    </td>
+                    <td className={inv.quotes?.quote_number ? "" : "inv-muted"}>
+                      {inv.quotes?.quote_number || "—"}
+                    </td>
+                    <td className={inv.customers?.name ? "" : "inv-muted"}>
+                      {inv.customers?.name || "—"}
+                    </td>
+                    <td>
+                      <span className={`inv-status inv-status--${inv.status}`}>
+                        {inv.status}
+                      </span>
+                    </td>
+                    <td
+                      className={
+                        inv.status !== "paid" && isPastDue(inv.due_date)
+                          ? "inv-due-overdue"
+                          : inv.due_date
+                          ? ""
+                          : "inv-muted"
+                      }
                     >
-                      <td className="inven-th-check">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(it.id)}
-                          onChange={() => toggleSelectRow(it.id)}
-                          aria-label={`Select ${it.name}`}
-                        />
-                      </td>
-                      <td className="inven-name-cell">{it.name}</td>
-                      <td className={it.sku ? "" : "inven-muted"}>{it.sku || "—"}</td>
-                      <td>
-                        <span className="inven-category-pill">{it.category?.trim() || UNCATEGORIZED}</span>
-                      </td>
-                      <td>
-                        <div className="inven-qty-cell">
+                      {formatDueDate(inv.due_date)}
+                    </td>
+                    <td className="inv-total-cell">R{Number(inv.total).toFixed(2)}</td>
+                    <td>
+                      <div className="inv-actions-cell">
+                        {inv.status !== "paid" && (
                           <button
-                            className="inven-stepper-btn"
-                            onClick={() => quickAdjust(it, -1)}
-                            disabled={isAdjusting || Number(it.quantity) <= 0}
-                            aria-label={`Decrease ${it.name} quantity`}
+                            className="inv-action-btn"
+                            onClick={() => handleMarkPaid(inv)}
                           >
-                            −
+                            Mark paid
                           </button>
-                          <span className={`inven-qty-value ${isLow ? "inven-qty-low" : ""}`}>
-                            {Number(it.quantity)}
-                          </span>
-                          <button
-                            className="inven-stepper-btn"
-                            onClick={() => quickAdjust(it, 1)}
-                            disabled={isAdjusting}
-                            aria-label={`Increase ${it.name} quantity`}
-                          >
-                            +
-                          </button>
-                        </div>
-                      </td>
-                      <td className="inven-muted">{threshold}</td>
-                      <td className={it.unit_cost != null ? "" : "inven-muted"}>
-                        {it.unit_cost != null ? `R${Number(it.unit_cost).toFixed(2)}` : "—"}
-                      </td>
-                      <td>
-                        <div className="inven-actions-cell">
-                          <button className="inven-action-btn" onClick={() => openEditModal(it)}>
-                            Edit
-                          </button>
-                          <button
-                            className="inven-action-btn inven-action-btn--danger"
-                            onClick={() => handleDelete(it)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                        )}
+                        <button className="inv-action-btn" onClick={() => handleDownload(inv)}>
+                          Download
+                        </button>
+                        <button
+                          className="inv-action-btn"
+                          onClick={() => handleSend(inv)}
+                          disabled={sendingId === inv.id || !!cooldownIds[inv.id]}
+                          title={cooldownIds[inv.id] ? "Sent — you can send again shortly" : ""}
+                        >
+                          {sendLabel(inv.id)}
+                        </button>
+                        <button className="inv-action-btn" onClick={() => handleDuplicate(inv)}>
+                          Duplicate
+                        </button>
+                        <button className="inv-action-btn" onClick={() => openEditModal(inv)}>
+                          Edit
+                        </button>
+                        <button
+                          className="inv-action-btn inv-action-btn--danger"
+                          onClick={() => handleDelete(inv)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -737,102 +1021,170 @@ function Inventory({ business, appUser }) {
       </div>
 
       {modalOpen && (
-        <div className="inven-modal-overlay" onClick={closeModal}>
-          <div className="inven-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>{editingItem ? "Edit item" : "Add item"}</h2>
+        <div className="inv-modal-overlay" onClick={closeModal}>
+          <div className="inv-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>{editingInvoice ? `Edit ${editingInvoice.invoice_number}` : "New invoice"}</h2>
             <form onSubmit={handleSave}>
-              <label className="inven-label">Name</label>
-              <input
-                className="inven-input"
-                placeholder="Item name"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-              />
-
-              <div className="inven-input-row">
+              <div className="inv-row-2">
                 <div>
-                  <label className="inven-label">SKU</label>
-                  <input
-                    className="inven-input"
-                    placeholder="Optional SKU"
-                    value={form.sku}
-                    onChange={(e) => setForm({ ...form, sku: e.target.value })}
-                  />
+                  <label className="inv-label">Customer</label>
+                  <select
+                    className="inv-select"
+                    value={form.customer_id}
+                    onChange={(e) => setForm({ ...form, customer_id: e.target.value })}
+                  >
+                    <option value="">Select a customer</option>
+                    {customers.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
-                  <label className="inven-label">Category</label>
-                  <input
-                    className="inven-input"
-                    placeholder="Optional category"
-                    value={form.category}
-                    onChange={(e) => setForm({ ...form, category: e.target.value })}
-                    list="inven-category-options"
-                  />
-                  <datalist id="inven-category-options">
-                    {categories
-                      .filter((c) => c !== UNCATEGORIZED)
-                      .map((c) => (
-                        <option key={c} value={c} />
-                      ))}
-                  </datalist>
+                  <label className="inv-label">Status</label>
+                  <select
+                    className="inv-select"
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  >
+                    {STATUSES.map((s) => (
+                      <option key={s} value={s}>
+                        {s.charAt(0).toUpperCase() + s.slice(1)}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              <div className="inven-input-row">
-                <div>
-                  <label className="inven-label">Quantity</label>
+              <label className="inv-label">Due date (optional)</label>
+              <input
+                className="inv-input"
+                type="date"
+                value={form.due_date}
+                onChange={(e) => setForm({ ...form, due_date: e.target.value })}
+              />
+
+              <div className="inv-items-label">
+                <label className="inv-label" style={{ margin: 0 }}>
+                  Line items
+                </label>
+                <button type="button" className="inv-add-row-btn" onClick={addLineItem}>
+                  + Add row
+                </button>
+              </div>
+
+              {lineItems.map((item, index) => (
+                <div className="inv-line-item" key={item.id || index}>
                   <input
-                    className="inven-input"
+                    className="inv-input"
+                    placeholder="Description"
+                    value={item.description}
+                    onChange={(e) => updateLineItem(index, "description", e.target.value)}
+                  />
+                  <input
+                    className="inv-input"
                     type="number"
                     min="0"
                     step="0.01"
-                    placeholder="0"
-                    value={form.quantity}
-                    onChange={(e) => setForm({ ...form, quantity: e.target.value })}
+                    placeholder="Qty"
+                    value={item.quantity}
+                    onChange={(e) => updateLineItem(index, "quantity", e.target.value)}
                   />
-                </div>
-                <div>
-                  <label className="inven-label">Low-stock threshold</label>
                   <input
-                    className="inven-input"
+                    className="inv-input"
                     type="number"
                     min="0"
-                    step="1"
-                    placeholder="5"
-                    value={form.low_stock_threshold}
-                    onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })}
+                    step="0.01"
+                    placeholder="Unit price"
+                    value={item.unit_price}
+                    onChange={(e) => updateLineItem(index, "unit_price", e.target.value)}
                   />
+                  <button
+                    type="button"
+                    className="inv-remove-row-btn"
+                    onClick={() => removeLineItem(index)}
+                  >
+                    ×
+                  </button>
                 </div>
+              ))}
+
+              <div className="inv-total-row">
+                Total: <strong>R{modalTotal.toFixed(2)}</strong>
               </div>
 
-              <label className="inven-label">Unit cost (R)</label>
-              <input
-                className="inven-input"
-                type="number"
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-                value={form.unit_cost}
-                onChange={(e) => setForm({ ...form, unit_cost: e.target.value })}
-              />
+              {editingInvoice && (
+                <div className="inv-attach-section">
+                  <label className="inv-label">Attachments (proof of payment, etc.)</label>
+                  {attachments.length > 0 && (
+                    <div className="inv-attach-list">
+                      {attachments.map((att) => (
+                        <div className="inv-attach-item" key={att.id}>
+                          <button
+                            type="button"
+                            className="inv-attach-link"
+                            onClick={() => openAttachment(att)}
+                            disabled={openingAttachmentId === att.id}
+                          >
+                            📎 {att.file_name}
+                            {openingAttachmentId === att.id ? " (opening...)" : ""}
+                          </button>
+                          <button
+                            type="button"
+                            className="inv-attach-remove"
+                            onClick={() => handleRemoveAttachment(att)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    style={{ display: "none" }}
+                    onChange={handleUploadAttachment}
+                  />
+                  <button
+                    type="button"
+                    className="inv-attach-upload-btn"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadingAttachment}
+                  >
+                    {uploadingAttachment ? "Uploading..." : "+ Upload file"}
+                  </button>
+                </div>
+              )}
 
-              {error && <p className="inven-error">{error}</p>}
+              {error && <p className="inv-error">{error}</p>}
 
-              <div className="inven-modal-actions">
-                <button type="button" className="inven-cancel-btn" onClick={closeModal}>
+              <div className="inv-modal-actions">
+                <button type="button" className="inv-cancel-btn" onClick={closeModal}>
                   Cancel
                 </button>
-                <button type="submit" className="inven-add-btn" disabled={saving}>
-                  {saving ? "Saving..." : editingItem ? "Save changes" : "Add item"}
+                <button type="submit" className="inv-add-btn" disabled={saving}>
+                  {saving ? "Saving..." : editingInvoice ? "Save changes" : "Create invoice"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      <div className="inv-toast-stack">
+        {toasts.map((t) => (
+          <div
+            key={t.id}
+            className={`inv-toast${t.variant === "error" ? " inv-toast--error" : ""}${t.leaving ? " inv-toast--leaving" : ""}`}
+          >
+            {t.message}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-export default Inventory;
+export default Invoices;
