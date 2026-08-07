@@ -85,8 +85,9 @@ function TeamSettings({ business, appUser }) {
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData?.session?.access_token;
+      console.log("DEBUG: about to invoke send-staff-invite", { accessToken, invite });
 
-      const { error: fnError } = await supabase.functions.invoke("send-staff-invite", {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke("send-staff-invite", {
         headers: { Authorization: `Bearer ${accessToken}` },
         body: {
           toEmail: invite.email,
@@ -96,9 +97,12 @@ function TeamSettings({ business, appUser }) {
         },
       });
 
+      console.log("DEBUG: send-staff-invite result", { fnData, fnError });
+
       if (fnError) throw fnError;
       setInviteSuccess("Invite sent!");
-    } catch {
+    } catch (err) {
+      console.log("DEBUG: send-staff-invite threw", err);
       setInviteSuccess(
         "Invite created, but the email couldn't be sent. You can find it under Pending invites and share the link manually."
       );
