@@ -1,12 +1,22 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
 const FROM_EMAIL = Deno.env.get("SEND_FROM_EMAIL") || "onboarding@resend.dev";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+function jsonResponse(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,13 +24,37 @@ serve(async (req) => {
   }
 
   try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // ---- Reject unauthenticated callers ----
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return jsonResponse({ error: "Missing Authorization header" }, 401);
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !userData?.user) {
+      return jsonResponse({ error: "Invalid or expired session" }, 401);
+    }
+
+    // Confirm this Firebase-authenticated caller actually belongs to a
+    // business in Astorra — not just that they have *some* valid token.
+    const sub = userData.user.user_metadata?.sub || userData.user.id;
+    const { data: appUser } = await supabase
+      .from("users")
+      .select("business_id")
+      .eq("firebase_uid", sub)
+      .maybeSingle();
+
+    if (!appUser?.business_id) {
+      return jsonResponse({ error: "No business found for this account" }, 403);
+    }
+
     const { type, number, toEmail, toName, pdfBase64, businessName } = await req.json();
 
     if (!toEmail || !pdfBase64 || !number) {
-      return new Response(JSON.stringify({ error: "Missing required fields" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: "Missing required fields" }, 400);
     }
 
     const label = type === "invoice" ? "Invoice" : "Quote";
@@ -54,20 +88,11 @@ serve(async (req) => {
 
     if (!emailRes.ok) {
       console.error("Resend error:", JSON.stringify(emailData));
-      return new Response(JSON.stringify({ error: emailData }), {
-        status: 502,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return jsonResponse({ error: emailData }, 502);
     }
 
-    return new Response(JSON.stringify({ success: true, id: emailData.id }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ success: true, id: emailData.id }, 200);
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return jsonResponse({ error: err.message }, 500);
   }
 });
