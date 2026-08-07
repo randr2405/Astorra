@@ -11,6 +11,7 @@ import PayInvoice from "./pages/PayInvoice";
 import Privacy from "./pages/Privacy";
 import Terms from "./pages/Terms";
 import Feedback from "./pages/Feedback";
+import JoinTeam from "./pages/JoinTeam";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import Customers from "./pages/Customers";
@@ -112,6 +113,11 @@ function App() {
         {/* Public, unauthenticated feedback / recommendations page — same
             tier as Landing/Privacy/Terms. */}
         <Route path="/feedback" element={<Feedback />} />
+
+        {/* Public, unauthenticated staff invite acceptance route — the
+            invitee handles their own Firebase sign-up/sign-in here before
+            accept_staff_invite links them to the inviting business. */}
+        <Route path="/join/:token" element={<JoinTeam />} />
 
         <Route
           path="/auth"

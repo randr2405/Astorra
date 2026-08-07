@@ -1,0 +1,229 @@
+.ts-section {
+  --navy-raised: #111527;
+  --purple: #7c3aed;
+  --blue: #3b82f6;
+  --teal: #14b8a6;
+  --border: rgba(255, 255, 255, 0.08);
+  --slate: #6b7280;
+  color: #e7e9ef;
+  font-family: "Inter", sans-serif;
+}
+
+.ts-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.ts-title {
+  font-family: "Sora", sans-serif;
+  font-size: 20px;
+  font-weight: 600;
+  color: #fdfdfe;
+  margin: 0 0 4px;
+}
+
+.ts-subtitle {
+  color: var(--slate);
+  font-size: 13.5px;
+  margin: 0;
+}
+
+.ts-muted {
+  color: var(--slate);
+  font-size: 13.5px;
+}
+
+.ts-error {
+  color: #f87171;
+  font-size: 13px;
+  margin: 0 0 14px;
+}
+
+.ts-success {
+  color: var(--teal);
+  font-size: 13px;
+  margin: 0 0 14px;
+}
+
+.ts-invite-form {
+  background: var(--navy-raised);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 28px;
+}
+
+.ts-form-row {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+
+.ts-form-field {
+  flex: 1;
+}
+
+.ts-form-field--narrow {
+  flex: 0 0 160px;
+}
+
+.ts-label {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: #d7dae2;
+  margin: 0 0 6px;
+}
+
+.ts-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  font-family: "Inter", sans-serif;
+  font-size: 14px;
+  color: #e7e9ef;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.ts-input:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.ts-input:focus {
+  outline: none;
+  border-color: var(--blue);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+select.ts-input {
+  cursor: pointer;
+}
+
+.ts-btn {
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-family: "Inter", sans-serif;
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.ts-btn--primary {
+  color: #fff;
+  background: linear-gradient(135deg, var(--purple), var(--blue) 55%, var(--teal));
+  box-shadow: 0 8px 24px -8px rgba(124, 58, 237, 0.5);
+}
+.ts-btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 28px -8px rgba(59, 130, 246, 0.55);
+}
+.ts-btn--primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+.ts-btn--ghost {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: #e7e9ef;
+}
+.ts-btn--ghost:hover {
+  border-color: var(--blue);
+}
+.ts-btn--sm {
+  padding: 6px 14px;
+  font-size: 12.5px;
+}
+
+.ts-list-block {
+  margin-bottom: 28px;
+}
+
+.ts-list-heading {
+  font-family: "Sora", sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fdfdfe;
+  margin: 0 0 12px;
+}
+
+.ts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--navy-raised);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.ts-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ts-row-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e7e9ef;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ts-row-sub {
+  font-size: 12px;
+  color: var(--slate);
+  text-transform: capitalize;
+}
+
+.ts-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 100px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.ts-badge--you {
+  background: rgba(20, 184, 166, 0.15);
+  color: var(--teal);
+}
+
+.ts-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: ts-spin 0.7s linear infinite;
+}
+.ts-spinner--lg {
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
+  border-color: rgba(255, 255, 255, 0.15);
+  border-top-color: var(--blue);
+  margin: 40px auto;
+}
+@keyframes ts-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

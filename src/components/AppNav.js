@@ -42,6 +42,12 @@ function AppNav({ business, showBack = true }) {
             Billing
           </button>
           <button
+            className={`app-nav-link ${isActive("/dashboard/team") ? "app-nav-link--active" : ""}`}
+            onClick={() => navigate("/dashboard/team")}
+          >
+            Team
+          </button>
+          <button
             className={`app-nav-link ${isActive("/dashboard/settings") ? "app-nav-link--active" : ""}`}
             onClick={() => navigate("/dashboard/settings")}
           >
