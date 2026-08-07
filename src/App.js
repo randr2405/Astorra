@@ -33,6 +33,7 @@ import Settings from "./pages/Settings";
 import AIBuilder from "./pages/AIBuilder";
 import Reports from "./pages/Reports";
 import Expenses from "./pages/Expenses";
+import Team from "./pages/Team";
 
 function App() {
   const [user, setUser] = useState(null);
@@ -403,6 +404,19 @@ function App() {
               <Navigate to="/dashboard/billing" replace />
             ) : (
               <AIBuilder business={business} appUser={appUser} onBusinessUpdate={handleBusinessUpdate} />
+            )
+          }
+        />
+
+        <Route
+          path="/dashboard/team"
+          element={
+            !user ? (
+              <Navigate to="/auth" replace />
+            ) : !business ? (
+              <Navigate to="/onboarding" replace />
+            ) : (
+              <Team business={business} appUser={appUser} />
             )
           }
         />
