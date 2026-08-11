@@ -15,12 +15,28 @@
 }
 
 .dash {
+  position: relative;
   min-height: 100vh;
   background: radial-gradient(circle at 15% 0%, rgba(124, 58, 237, 0.12), transparent 40%),
     radial-gradient(circle at 85% 20%, rgba(20, 184, 166, 0.08), transparent 45%),
     var(--navy);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
+  overflow-x: hidden;
+}
+
+/* Waves canvas background — sits behind the nav and body content */
+.dash-waves {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.5;
+}
+.dash-waves .waves-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 /* Topbar */
@@ -79,6 +95,8 @@
 
 /* Body */
 .dash-body {
+  position: relative;
+  z-index: 1;
   max-width: 1120px;
   margin: 0 auto;
   padding: 48px 32px 80px;
@@ -123,7 +141,8 @@
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 16px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(17, 21, 39, 0.55);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 18px 22px;
@@ -235,7 +254,8 @@
 
 .mod-card {
   position: relative;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(17, 21, 39, 0.5);
+  backdrop-filter: blur(8px);
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 24px;
@@ -265,7 +285,7 @@
   border-color: var(--blue);
   transform: translateY(-4px);
   box-shadow: 0 14px 30px -12px rgba(59, 130, 246, 0.35);
-  background: rgba(255, 255, 255, 0.045);
+  background: rgba(17, 21, 39, 0.65);
 }
 .mod-card:hover::before {
   opacity: 1;
@@ -355,13 +375,14 @@
   padding: 26px;
   border: 1px dashed var(--border);
   border-radius: 12px;
+  background: rgba(17, 21, 39, 0.35);
   opacity: 0;
   animation: fadeInUp 0.5s ease 0.35s forwards;
   transition: border-color 0.2s ease, background 0.2s ease;
 }
 .dash-footnote:hover {
   border-color: rgba(124, 58, 237, 0.5);
-  background: rgba(124, 58, 237, 0.04);
+  background: rgba(124, 58, 237, 0.06);
 }
 .dash-footnote strong {
   color: #d7dae2;
@@ -434,6 +455,9 @@
   }
   .mod-status--active::before {
     animation: none !important;
+  }
+  .dash-waves {
+    display: none;
   }
 }
 
