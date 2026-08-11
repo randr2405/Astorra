@@ -33,34 +33,45 @@ serve(async (req) => {
       return jsonResponse({ error: "Missing Authorization header" }, 401);
     }
 
-    // Astorra uses Firebase as a third-party auth provider for Supabase —
-    // there's no matching row in auth.users, so supabase.auth.getUser()
-    // always fails here. Supabase's own gateway already verifies the JWT
-    // signature before this function runs, so it's safe to decode the
-    // payload directly rather than re-validating it.
     const token = authHeader.replace("Bearer ", "");
-    let sub: string | undefined;
-    try {
-      const payload = JSON.parse(atob(token.split(".")[1]));
-      sub = payload.sub;
-    } catch {
-      return jsonResponse({ error: "Invalid or expired session" }, 401);
-    }
 
-    if (!sub) {
-      return jsonResponse({ error: "Invalid or expired session" }, 401);
-    }
+    // Server-to-server calls (e.g. payfast-notify, after a staff seat
+    // payment confirms) authenticate with the Supabase service role key
+    // directly, rather than a Firebase-issued user token — there's no
+    // signed-in browser session in a payment webhook. Only our own
+    // backend ever has this secret, so an exact match is sufficient to
+    // trust the caller and skip the Firebase/business lookup below.
+    const isServiceRoleCall = token === SUPABASE_SERVICE_ROLE_KEY;
 
-    // Confirm this Firebase-authenticated caller actually belongs to a
-    // business in Astorra — not just that they have *some* valid token.
-    const { data: appUser } = await supabase
-      .from("users")
-      .select("business_id")
-      .eq("firebase_uid", sub)
-      .maybeSingle();
+    if (!isServiceRoleCall) {
+      // Astorra uses Firebase as a third-party auth provider for Supabase —
+      // there's no matching row in auth.users, so supabase.auth.getUser()
+      // always fails here. Supabase's own gateway already verifies the JWT
+      // signature before this function runs, so it's safe to decode the
+      // payload directly rather than re-validating it.
+      let sub: string | undefined;
+      try {
+        const payload = JSON.parse(atob(token.split(".")[1]));
+        sub = payload.sub;
+      } catch {
+        return jsonResponse({ error: "Invalid or expired session" }, 401);
+      }
 
-    if (!appUser?.business_id) {
-      return jsonResponse({ error: "No business found for this account" }, 403);
+      if (!sub) {
+        return jsonResponse({ error: "Invalid or expired session" }, 401);
+      }
+
+      // Confirm this Firebase-authenticated caller actually belongs to a
+      // business in Astorra — not just that they have *some* valid token.
+      const { data: appUser } = await supabase
+        .from("users")
+        .select("business_id")
+        .eq("firebase_uid", sub)
+        .maybeSingle();
+
+      if (!appUser?.business_id) {
+        return jsonResponse({ error: "No business found for this account" }, 403);
+      }
     }
 
     const { toEmail, businessName, role, inviteToken } = await req.json();
