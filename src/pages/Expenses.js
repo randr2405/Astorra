@@ -1,278 +1,130 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import * as THREE from "three";
+import { Renderer, Program, Mesh, Color, Triangle } from "ogl";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import AppNav from "../components/AppNav";
 import "./Expenses.css";
 
 // ---------------------------------------------------------------------
-// GridDistortion — your original three.js component, inlined here (no
-// separate file) so this page has zero local imports beyond libraries
-// in package.json. Requires "three" as a dependency. Loads a real image
-// (via THREE.TextureLoader) and warps it with the mouse-driven grid.
+// Iridescence — inlined here so this page has zero local component
+// imports beyond libraries in package.json. Requires "ogl".
 // ---------------------------------------------------------------------
-const distortionVertexShader = `
-uniform float time;
+const iridescenceVertexShader = `
+attribute vec2 uv;
+attribute vec2 position;
 varying vec2 vUv;
-varying vec3 vPosition;
-
 void main() {
   vUv = uv;
-  vPosition = position;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
+  gl_Position = vec4(position, 0, 1);
+}
+`;
 
-const distortionFragmentShader = `
-uniform sampler2D uDataTexture;
-uniform sampler2D uTexture;
-uniform vec4 resolution;
+const iridescenceFragmentShader = `
+precision highp float;
+uniform float uTime;
+uniform vec3 uColor;
+uniform vec3 uResolution;
+uniform vec2 uMouse;
+uniform float uAmplitude;
+uniform float uSpeed;
 varying vec2 vUv;
-
 void main() {
-  vec2 uv = vUv;
-  vec4 offset = texture2D(uDataTexture, vUv);
-  gl_FragColor = texture2D(uTexture, uv - 0.02 * offset.rg);
-}`;
+  float mr = min(uResolution.x, uResolution.y);
+  vec2 uv = (vUv.xy * 2.0 - 1.0) * uResolution.xy / mr;
+  uv += (uMouse - vec2(0.5)) * uAmplitude;
+  float d = -uTime * 0.5 * uSpeed;
+  float a = 0.0;
+  for (float i = 0.0; i < 8.0; ++i) {
+    a += cos(i - d - a * uv.x);
+    d += sin(uv.y * i + a);
+  }
+  d += uTime * 0.5 * uSpeed;
+  vec3 col = vec3(cos(uv * vec2(d, a)) * 0.6 + 0.4, cos(a + d) * 0.5 + 0.5);
+  col = cos(col * cos(vec3(d, a, 2.5)) * 0.5 + 0.5) * uColor;
+  gl_FragColor = vec4(col, 1.0);
+}
+`;
 
-function GridDistortion({
-  grid = 15,
-  mouse = 0.1,
-  strength = 0.15,
-  relaxation = 0.9,
-  imageSrc,
-  className = "",
-}) {
-  const containerRef = useRef(null);
-  const sceneRef = useRef(null);
-  const rendererRef = useRef(null);
-  const cameraRef = useRef(null);
-  const planeRef = useRef(null);
-  const imageAspectRef = useRef(1);
-  const animationIdRef = useRef(null);
-  const resizeObserverRef = useRef(null);
+function Iridescence({ color = [1, 1, 1], speed = 1.0, amplitude = 0.1, mouseReact = true, ...rest }) {
+  const ctnDom = useRef(null);
+  const mousePos = useRef({ x: 0.5, y: 0.5 });
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!ctnDom.current) return;
+    const ctn = ctnDom.current;
+    const renderer = new Renderer();
+    const gl = renderer.gl;
+    gl.clearColor(1, 1, 1, 1);
 
-    const container = containerRef.current;
+    let program;
 
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
-
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: "high-performance",
-    });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x000000, 0);
-    rendererRef.current = renderer;
-
-    container.innerHTML = "";
-    container.appendChild(renderer.domElement);
-
-    const camera = new THREE.OrthographicCamera(0, 0, 0, 0, -1000, 1000);
-    camera.position.z = 2;
-    cameraRef.current = camera;
-
-    const uniforms = {
-      time: { value: 0 },
-      resolution: { value: new THREE.Vector4() },
-      uTexture: { value: null },
-      uDataTexture: { value: null },
-    };
-
-    const textureLoader = new THREE.TextureLoader();
-    textureLoader.load(imageSrc, (texture) => {
-      texture.minFilter = THREE.LinearFilter;
-      texture.magFilter = THREE.LinearFilter;
-      texture.wrapS = THREE.ClampToEdgeWrapping;
-      texture.wrapT = THREE.ClampToEdgeWrapping;
-      imageAspectRef.current = texture.image.width / texture.image.height;
-      uniforms.uTexture.value = texture;
-      handleResize();
-    });
-
-    const size = grid;
-    const data = new Float32Array(4 * size * size);
-    for (let i = 0; i < size * size; i++) {
-      data[i * 4] = Math.random() * 255 - 125;
-      data[i * 4 + 1] = Math.random() * 255 - 125;
-    }
-
-    const dataTexture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.FloatType);
-    dataTexture.needsUpdate = true;
-    uniforms.uDataTexture.value = dataTexture;
-
-    const material = new THREE.ShaderMaterial({
-      side: THREE.DoubleSide,
-      uniforms,
-      vertexShader: distortionVertexShader,
-      fragmentShader: distortionFragmentShader,
-      transparent: true,
-    });
-
-    const geometry = new THREE.PlaneGeometry(1, 1, size - 1, size - 1);
-    const plane = new THREE.Mesh(geometry, material);
-    planeRef.current = plane;
-    scene.add(plane);
-
-    const handleResize = () => {
-      if (!container || !renderer || !camera) return;
-
-      const rect = container.getBoundingClientRect();
-      const width = rect.width;
-      const height = rect.height;
-
-      if (width === 0 || height === 0) return;
-
-      const containerAspect = width / height;
-
-      renderer.setSize(width, height);
-
-      if (plane) {
-        plane.scale.set(containerAspect, 1, 1);
+    function resize() {
+      const scale = 1;
+      renderer.setSize(ctn.offsetWidth * scale, ctn.offsetHeight * scale);
+      if (program) {
+        program.uniforms.uResolution.value = new Color(
+          gl.canvas.width,
+          gl.canvas.height,
+          gl.canvas.width / gl.canvas.height
+        );
       }
-
-      const frustumHeight = 1;
-      const frustumWidth = frustumHeight * containerAspect;
-      camera.left = -frustumWidth / 2;
-      camera.right = frustumWidth / 2;
-      camera.top = frustumHeight / 2;
-      camera.bottom = -frustumHeight / 2;
-      camera.updateProjectionMatrix();
-
-      uniforms.resolution.value.set(width, height, 1, 1);
-    };
-
-    if (window.ResizeObserver) {
-      const resizeObserver = new ResizeObserver(() => {
-        handleResize();
-      });
-      resizeObserver.observe(container);
-      resizeObserverRef.current = resizeObserver;
-    } else {
-      window.addEventListener("resize", handleResize);
     }
+    window.addEventListener("resize", resize, false);
+    resize();
 
-    const mouseState = {
-      x: 0,
-      y: 0,
-      prevX: 0,
-      prevY: 0,
-      vX: 0,
-      vY: 0,
-    };
+    const geometry = new Triangle(gl);
+    program = new Program(gl, {
+      vertex: iridescenceVertexShader,
+      fragment: iridescenceFragmentShader,
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: new Color(...color) },
+        uResolution: {
+          value: new Color(gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height),
+        },
+        uMouse: { value: new Float32Array([mousePos.current.x, mousePos.current.y]) },
+        uAmplitude: { value: amplitude },
+        uSpeed: { value: speed },
+      },
+    });
 
-    const handleMouseMove = (e) => {
-      const rect = container.getBoundingClientRect();
+    const mesh = new Mesh(gl, { geometry, program });
+    let animateId;
+
+    function update(t) {
+      animateId = requestAnimationFrame(update);
+      program.uniforms.uTime.value = t * 0.001;
+      renderer.render({ scene: mesh });
+    }
+    animateId = requestAnimationFrame(update);
+    ctn.appendChild(gl.canvas);
+
+    function handleMouseMove(e) {
+      const rect = ctn.getBoundingClientRect();
       const x = (e.clientX - rect.left) / rect.width;
-      const y = 1 - (e.clientY - rect.top) / rect.height;
-      mouseState.vX = x - mouseState.prevX;
-      mouseState.vY = y - mouseState.prevY;
-      Object.assign(mouseState, { x, y, prevX: x, prevY: y });
-    };
-
-    const handleMouseLeave = () => {
-      if (dataTexture) {
-        dataTexture.needsUpdate = true;
-      }
-      Object.assign(mouseState, {
-        x: 0,
-        y: 0,
-        prevX: 0,
-        prevY: 0,
-        vX: 0,
-        vY: 0,
-      });
-    };
-
-    container.addEventListener("mousemove", handleMouseMove);
-    container.addEventListener("mouseleave", handleMouseLeave);
-
-    handleResize();
-
-    const animate = () => {
-      animationIdRef.current = requestAnimationFrame(animate);
-
-      if (!renderer || !scene || !camera) return;
-
-      uniforms.time.value += 0.05;
-
-      const data = dataTexture.image.data;
-      for (let i = 0; i < size * size; i++) {
-        data[i * 4] *= relaxation;
-        data[i * 4 + 1] *= relaxation;
-      }
-
-      const gridMouseX = size * mouseState.x;
-      const gridMouseY = size * mouseState.y;
-      const maxDist = size * mouse;
-
-      for (let i = 0; i < size; i++) {
-        for (let j = 0; j < size; j++) {
-          const distSq = Math.pow(gridMouseX - i, 2) + Math.pow(gridMouseY - j, 2);
-          if (distSq < maxDist * maxDist) {
-            const index = 4 * (i + size * j);
-            const power = Math.min(maxDist / Math.sqrt(distSq), 10);
-            data[index] += strength * 100 * mouseState.vX * power;
-            data[index + 1] -= strength * 100 * mouseState.vY * power;
-          }
-        }
-      }
-
-      dataTexture.needsUpdate = true;
-      renderer.render(scene, camera);
-    };
-
-    animate();
+      const y = 1.0 - (e.clientY - rect.top) / rect.height;
+      mousePos.current = { x, y };
+      program.uniforms.uMouse.value[0] = x;
+      program.uniforms.uMouse.value[1] = y;
+    }
+    if (mouseReact) {
+      ctn.addEventListener("mousemove", handleMouseMove);
+    }
 
     return () => {
-      if (animationIdRef.current) {
-        cancelAnimationFrame(animationIdRef.current);
+      cancelAnimationFrame(animateId);
+      window.removeEventListener("resize", resize);
+      if (mouseReact) {
+        ctn.removeEventListener("mousemove", handleMouseMove);
       }
-
-      if (resizeObserverRef.current) {
-        resizeObserverRef.current.disconnect();
-      } else {
-        window.removeEventListener("resize", handleResize);
+      if (ctn.contains(gl.canvas)) {
+        ctn.removeChild(gl.canvas);
       }
-
-      container.removeEventListener("mousemove", handleMouseMove);
-      container.removeEventListener("mouseleave", handleMouseLeave);
-
-      if (renderer) {
-        renderer.dispose();
-        renderer.forceContextLoss();
-        if (container.contains(renderer.domElement)) {
-          container.removeChild(renderer.domElement);
-        }
-      }
-
-      if (geometry) geometry.dispose();
-      if (material) material.dispose();
-      if (dataTexture) dataTexture.dispose();
-      if (uniforms.uTexture.value) uniforms.uTexture.value.dispose();
-
-      sceneRef.current = null;
-      rendererRef.current = null;
-      cameraRef.current = null;
-      planeRef.current = null;
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
     };
-  }, [grid, mouse, strength, relaxation, imageSrc]);
+  }, [color, speed, amplitude, mouseReact]);
 
-  return (
-    <div
-      ref={containerRef}
-      className={`distortion-container ${className}`}
-      style={{
-        width: "100%",
-        height: "100%",
-        minWidth: "0",
-        minHeight: "0",
-      }}
-    />
-  );
+  return <div ref={ctnDom} className="iridescence-container" {...rest} />;
 }
 
 const currency = new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" });
@@ -683,16 +535,15 @@ function Expenses({ business }) {
 
   return (
     <div className="exp-page">
-      {/* Ambient distortion background, sits fixed behind everything.
-          A navy/purple gradient overlay (in CSS) keeps the loaded photo
-          on-theme instead of looking like a raw stock image. */}
+      {/* Ambient iridescence background, sits fixed behind everything.
+          A navy/purple/blue gradient overlay (in CSS) keeps it dim and
+          on-theme instead of a bright full-strength shader. */}
       <div className="exp-bg" aria-hidden="true">
-        <GridDistortion
-          imageSrc="https://picsum.photos/1920/1080?grayscale"
-          grid={10}
-          mouse={0.25}
-          strength={0.15}
-          relaxation={0.9}
+        <Iridescence
+          color={[0.5, 0.6, 0.8]}
+          mouseReact
+          amplitude={0.1}
+          speed={1}
           className="exp-bg-distortion"
         />
         <div className="exp-bg-overlay" />
