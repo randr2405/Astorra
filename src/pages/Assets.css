@@ -16,9 +16,40 @@
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
   position: relative;
+  overflow-x: hidden;
+}
+
+/* ---------------------------------------------------------------------
+   Dither wave shader background. Fixed behind everything, tinted purple
+   (matching --purple/--blue) instead of the original grey, with a soft
+   vignette so it fades toward the edges without disappearing.
+   --------------------------------------------------------------------- */
+.ast-dither-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--navy);
+  pointer-events: none;
+}
+.ast-dither-container {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+.ast-dither-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(130% 100% at 50% 0%, rgba(11, 15, 26, 0) 0%, rgba(11, 15, 26, 0.15) 65%, rgba(11, 15, 26, 0.55) 100%),
+    linear-gradient(180deg, rgba(11, 15, 26, 0) 0%, rgba(11, 15, 26, 0.35) 70%, rgba(11, 15, 26, 0.7) 100%);
 }
 
 .ast-body {
+  position: relative;
+  z-index: 1;
   max-width: 1120px;
   margin: 0 auto;
   padding: 48px 32px 80px;
@@ -93,6 +124,8 @@
   padding: 60px 20px;
   border: 1px dashed var(--border);
   border-radius: 12px;
+  background: rgba(17, 21, 39, 0.5);
+  backdrop-filter: blur(6px);
 }
 .ast-inline-link {
   background: none;
@@ -126,7 +159,8 @@
   padding: 7px 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: transparent;
+  background: rgba(17, 21, 39, 0.45);
+  backdrop-filter: blur(4px);
   color: rgba(255, 255, 255, 0.7);
   font-family: "Inter", sans-serif;
   font-size: 13px;
@@ -138,7 +172,7 @@
 .ast-filter-btn--active {
   border-color: var(--purple);
   color: #fdfdfe;
-  background: rgba(124, 58, 237, 0.12);
+  background: rgba(124, 58, 237, 0.2);
 }
 .ast-filter-count {
   font-size: 11px;
@@ -175,7 +209,8 @@
   padding: 9px 30px 9px 34px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(17, 21, 39, 0.5);
+  backdrop-filter: blur(4px);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
   font-size: 13px;
@@ -185,7 +220,7 @@
 .ast-search input::placeholder { color: var(--slate); }
 .ast-search input:focus {
   border-color: var(--blue);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(17, 21, 39, 0.75);
 }
 .ast-search-clear {
   position: absolute;
@@ -201,7 +236,8 @@
 .ast-search-clear:hover { color: #fdfdfe; }
 
 .ast-sort-select {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(17, 21, 39, 0.5);
+  backdrop-filter: blur(4px);
   border: 1px solid var(--border);
   color: #e7e9ef;
   border-radius: 8px;
@@ -220,7 +256,8 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(17, 21, 39, 0.55);
+  backdrop-filter: blur(5px);
 }
 .ast-table { width: 100%; border-collapse: collapse; }
 .ast-table th {
@@ -247,7 +284,7 @@
   transition: background 0.15s ease;
   cursor: pointer;
 }
-.ast-row:hover td { background: rgba(255, 255, 255, 0.025); }
+.ast-row:hover td { background: rgba(255, 255, 255, 0.04); }
 
 @keyframes ast-row-in {
   from { opacity: 0; transform: translateY(6px); }
