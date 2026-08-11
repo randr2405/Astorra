@@ -1,9 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { Link } from "react-router-dom";
-import { auth } from "../lib/firebase";
 import { supabase } from "../lib/supabaseClient";
-import { getStaffLimit } from "../lib/plans";
 import "./TeamSettings.css";
+
+// Must match REACT_APP_SUPABASE_URL's project ref — Edge Functions live at
+// <SUPABASE_URL>/functions/v1/<function-name>.
+const FUNCTIONS_URL = `${process.env.REACT_APP_SUPABASE_URL}/functions/v1`;
+
+const STAFF_SEAT_PRICE = 79; // R79 once-off per staff member, matches payfast-checkout
 
 function TeamSettings({ business, appUser }) {
   const [staff, setStaff] = useState([]);
@@ -16,7 +19,6 @@ function TeamSettings({ business, appUser }) {
   const [inviteRole, setInviteRole] = useState("staff");
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   const [inviteError, setInviteError] = useState("");
-  const [inviteSuccess, setInviteSuccess] = useState("");
 
   const [revokingId, setRevokingId] = useState(null);
 
@@ -51,77 +53,68 @@ function TeamSettings({ business, appUser }) {
     loadData();
   }, [loadData]);
 
-  const staffLimit = getStaffLimit(business.plan);
-  // Pending invites reserve a seat too, so someone can't be invited past
-  // the limit and just left unaccepted to dodge it.
-  const seatsUsed = staff.length + invites.length;
-  const atLimit = seatsUsed >= staffLimit;
-
-  const handleCreateInvite = async (e) => {
+  // Every staff member beyond the owner costs a once-off R79 fee, paid via
+  // PayFast. The invite itself isn't created here at all — it only gets
+  // created by payfast-notify once the payment actually confirms, so
+  // there's no "unpaid ghost invite" state to manage client-side.
+  const handleStartSeatCheckout = async (e) => {
     e.preventDefault();
     setInviteError("");
-    setInviteSuccess("");
 
-    if (atLimit) {
-      setInviteError(
-        `You've reached your plan's staff limit (${staffLimit === Infinity ? "unlimited" : staffLimit}). Upgrade to invite more people.`
-      );
+    if (!inviteEmail) {
+      setInviteError("Please enter an email address.");
+      return;
+    }
+
+    const alreadyStaff = staff.some((m) => m.email?.toLowerCase() === inviteEmail.toLowerCase());
+    const alreadyInvited = invites.some((i) => i.email?.toLowerCase() === inviteEmail.toLowerCase());
+
+    if (alreadyStaff) {
+      setInviteError("This person is already on your team.");
+      return;
+    }
+    if (alreadyInvited) {
+      setInviteError("This email already has a pending invite.");
       return;
     }
 
     setInviteSubmitting(true);
 
-    let invite = null;
-
     try {
-      const { data, error: rpcError } = await supabase.rpc("create_staff_invite", {
-        p_email: inviteEmail,
-        p_role: inviteRole,
+      const params = new URLSearchParams({
+        business_id: business.id,
+        type: "seat",
+        invite_email: inviteEmail,
+        invite_role: inviteRole,
       });
 
-      if (rpcError) throw rpcError;
-      invite = data;
+      const response = await fetch(`${FUNCTIONS_URL}/payfast-checkout?${params.toString()}`);
+
+      if (!response.ok) {
+        throw new Error(`Checkout setup failed (${response.status})`);
+      }
+
+      const { action, fields } = await response.json();
+
+      const form = document.createElement("form");
+      form.method = "POST";
+      form.action = action;
+
+      Object.entries(fields).forEach(([key, value]) => {
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = key;
+        input.value = value;
+        form.appendChild(input);
+      });
+
+      document.body.appendChild(form);
+      form.submit();
+      // Browser navigates away to PayFast here, so no need to reset
+      // inviteSubmitting — the component unmounts.
     } catch (err) {
-      setInviteError(
-        err.message?.includes("INVITE_ALREADY_PENDING")
-          ? "This email already has a pending invite."
-          : err.message?.includes("ONLY_OWNER_CAN_INVITE")
-          ? "Only the business owner can send invites."
-          : err.message?.includes("STAFF_LIMIT_REACHED")
-          ? `You've reached your plan's staff limit (${staffLimit === Infinity ? "unlimited" : staffLimit}). Upgrade to invite more people.`
-          : "Something went wrong creating the invite. Please try again."
-      );
       setInviteSubmitting(false);
-      return;
-    }
-
-    // Invite row is created at this point regardless of what happens next,
-    // so refresh the list and clear the form even if email sending fails.
-    setInviteEmail("");
-    setInviteRole("staff");
-    await loadData();
-
-    try {
-      const accessToken = await auth.currentUser.getIdToken();
-
-      const { error: fnError } = await supabase.functions.invoke("send-staff-invite", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: {
-          toEmail: invite.email,
-          businessName: business.name,
-          role: invite.role,
-          inviteToken: invite.token,
-        },
-      });
-
-      if (fnError) throw fnError;
-      setInviteSuccess("Invite sent!");
-    } catch {
-      setInviteSuccess(
-        "Invite created, but the email couldn't be sent. You can find it under Pending invites and share the link manually."
-      );
-    } finally {
-      setInviteSubmitting(false);
+      setInviteError(`Could not start checkout: ${err.message}`);
     }
   };
 
@@ -156,36 +149,19 @@ function TeamSettings({ business, appUser }) {
         <div>
           <h2 className="ts-title">Team</h2>
           <p className="ts-subtitle">
-            Manage who has access to your Astorra dashboard.{" "}
-            <span className="ts-muted">
-              {seatsUsed} / {staffLimit === Infinity ? "∞" : staffLimit} seats used
-            </span>
+            Manage who has access to your Astorra dashboard. Adding a staff member is a once-off
+            R{STAFF_SEAT_PRICE} fee, paid via PayFast.
           </p>
         </div>
-        <button
-          className="ts-btn ts-btn--primary"
-          onClick={() => setShowInviteForm((v) => !v)}
-        >
+        <button className="ts-btn ts-btn--primary" onClick={() => setShowInviteForm((v) => !v)}>
           {showInviteForm ? "Cancel" : "Invite staff"}
         </button>
       </div>
 
       {error && <p className="ts-error">{error}</p>}
 
-      {showInviteForm && atLimit && (
-        <div className="ts-upgrade-prompt">
-          <p>
-            You've used all {staffLimit} seat{staffLimit === 1 ? "" : "s"} on your{" "}
-            <strong>{business.plan}</strong> plan. Upgrade your plan to invite more staff.
-          </p>
-          <Link to="/dashboard/billing" className="ts-btn ts-btn--primary ts-btn--sm">
-            Upgrade plan
-          </Link>
-        </div>
-      )}
-
-      {showInviteForm && !atLimit && (
-        <form className="ts-invite-form" onSubmit={handleCreateInvite}>
+      {showInviteForm && (
+        <form className="ts-invite-form" onSubmit={handleStartSeatCheckout}>
           <div className="ts-form-row">
             <div className="ts-form-field">
               <label className="ts-label" htmlFor="ts-email">
@@ -220,10 +196,9 @@ function TeamSettings({ business, appUser }) {
           </div>
 
           {inviteError && <p className="ts-error">{inviteError}</p>}
-          {inviteSuccess && <p className="ts-success">{inviteSuccess}</p>}
 
           <button className="ts-btn ts-btn--primary" type="submit" disabled={inviteSubmitting}>
-            {inviteSubmitting ? <span className="ts-spinner" /> : "Send invite"}
+            {inviteSubmitting ? <span className="ts-spinner" /> : `Pay R${STAFF_SEAT_PRICE} & send invite`}
           </button>
         </form>
       )}

@@ -31,20 +31,12 @@ export const AI_ACCESS = {
   enterprise: { level: "unlimited", maxRecommendations: Infinity, monthlyCredits: Infinity },
 };
 
-// Seat limits — counts the owner + every accepted staff member + every
-// pending invite (a pending invite reserves a seat so you can't invite
-// past the limit and just leave it unaccepted). Mirrored server-side in
-// the create_staff_invite RPC since this file can't be imported there.
-export const PLAN_STAFF_LIMITS = {
-  free: 1,          // owner only, no additional staff
-  starter: 3,
-  professional: 10,
-  enterprise: Infinity,
-};
-
-export function getStaffLimit(plan) {
-  return PLAN_STAFF_LIMITS[plan] ?? PLAN_STAFF_LIMITS.free;
-}
+// Staff seats are NOT plan-tiered — every staff member beyond the owner
+// costs a flat once-off R79 fee via PayFast, regardless of plan. See
+// TeamSettings.js and supabase/functions/payfast-checkout|notify. Kept
+// here as the single source of truth for that price so the UI copy and
+// any future plan-comparison page can reference it without hardcoding.
+export const STAFF_SEAT_PRICE = 79;
 
 // Core installable modules (MVP scope). Category groupings mirror the
 // marketplace structure described in the brand doc (Sales, HR, Operations,
@@ -110,4 +102,4 @@ export function getAiAccess(plan) {
 
 export function hasAiAccess(plan) {
   return getAiAccess(plan).level !== "none";
-}
+}mmit  
