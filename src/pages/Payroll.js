@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 import jsPDF from "jspdf";
-import { gsap } from "gsap";
 import "./Payroll.css";
 
 const RUN_STATUS_OPTIONS = ["draft", "processed", "paid"];
@@ -13,7 +12,8 @@ const RUN_STATUS_LABEL = {
 
 // ----------------------------------------------------------------------
 // DotGrid — inlined here so this page has zero local component imports
-// beyond libraries in package.json. Requires "gsap".
+// beyond libraries in package.json. Uses only plain requestAnimationFrame
+// easing (no gsap dependency).
 // ----------------------------------------------------------------------
 const dotGridThrottle = (func, limit) => {
   let lastCall = 0;
@@ -34,6 +34,42 @@ function dotGridHexToRgb(hex) {
     g: parseInt(m[2], 16),
     b: parseInt(m[3], 16),
   };
+}
+
+// Eases a dot's xOffset/yOffset toward a target each frame. Used both for
+// the initial "push" (target = displacement) and the "return" (target =
+// 0), so the whole interaction is just two easing phases chained together
+// via dot._phase, with no external animation library involved.
+function dotGridStepEasing(dot, dt) {
+  if (dot._phase === "push") {
+    const speed = 1 - Math.pow(1 - dot._pushEase, dt / 16.67);
+    dot.xOffset += (dot._targetX - dot.xOffset) * speed;
+    dot.yOffset += (dot._targetY - dot.yOffset) * speed;
+    const closeEnough =
+      Math.abs(dot._targetX - dot.xOffset) < 0.4 && Math.abs(dot._targetY - dot.yOffset) < 0.4;
+    if (closeEnough) {
+      dot.xOffset = dot._targetX;
+      dot.yOffset = dot._targetY;
+      dot._phase = "return";
+      dot._returnStart = performance.now();
+      dot._returnFromX = dot.xOffset;
+      dot._returnFromY = dot.yOffset;
+    }
+  } else if (dot._phase === "return") {
+    const elapsed = (performance.now() - dot._returnStart) / 1000;
+    const t = Math.min(elapsed / dot._returnDuration, 1);
+    // elastic-out approximation
+    const c4 = (2 * Math.PI) / 3;
+    const eased = t === 0 ? 0 : t === 1 ? 1 : Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * c4) + 1;
+    dot.xOffset = dot._returnFromX * (1 - eased);
+    dot.yOffset = dot._returnFromY * (1 - eased);
+    if (t >= 1) {
+      dot.xOffset = 0;
+      dot.yOffset = 0;
+      dot._phase = "idle";
+      dot._inertiaApplied = false;
+    }
+  }
 }
 
 function DotGrid({
@@ -64,6 +100,7 @@ function DotGrid({
     lastX: 0,
     lastY: 0,
   });
+  const lastFrameRef = useRef(performance.now());
 
   const baseRgb = useMemo(() => dotGridHexToRgb(baseColor), [baseColor]);
   const activeRgb = useMemo(() => dotGridHexToRgb(activeColor), [activeColor]);
@@ -108,11 +145,25 @@ function DotGrid({
       for (let x = 0; x < cols; x++) {
         const cx = startX + x * cell;
         const cy = startY + y * cell;
-        dots.push({ cx, cy, xOffset: 0, yOffset: 0, _inertiaApplied: false });
+        dots.push({
+          cx,
+          cy,
+          xOffset: 0,
+          yOffset: 0,
+          _inertiaApplied: false,
+          _phase: "idle",
+          _targetX: 0,
+          _targetY: 0,
+          _pushEase: 0.22,
+          _returnStart: 0,
+          _returnFromX: 0,
+          _returnFromY: 0,
+          _returnDuration: returnDuration,
+        });
       }
     }
     dotsRef.current = dots;
-  }, [dotSize, gap]);
+  }, [dotSize, gap, returnDuration]);
 
   useEffect(() => {
     if (!circlePath) return;
@@ -121,6 +172,10 @@ function DotGrid({
     const proxSq = proximity * proximity;
 
     const draw = () => {
+      const now = performance.now();
+      const dt = now - lastFrameRef.current;
+      lastFrameRef.current = now;
+
       const canvas = canvasRef.current;
       if (!canvas) return;
       const ctx = canvas.getContext("2d");
@@ -130,6 +185,10 @@ function DotGrid({
       const { x: px, y: py } = pointerRef.current;
 
       for (const dot of dotsRef.current) {
+        if (dot._phase === "push" || dot._phase === "return") {
+          dotGridStepEasing(dot, dt);
+        }
+
         const ox = dot.cx + dot.xOffset;
         const oy = dot.cy + dot.yOffset;
         const dx = dot.cx - px;
@@ -176,6 +235,16 @@ function DotGrid({
   }, [buildGrid]);
 
   useEffect(() => {
+    const triggerPush = (dot, targetX, targetY) => {
+      dot._inertiaApplied = true;
+      dot._phase = "push";
+      dot._targetX = targetX;
+      dot._targetY = targetY;
+      // resistance (ms-ish scale from original API) nudges how snappy the
+      // push-in eases; higher resistance = softer/slower approach.
+      dot._pushEase = Math.max(0.08, Math.min(0.4, 900 / Math.max(resistance, 1)));
+    };
+
     const onMove = (e) => {
       const now = performance.now();
       const pr = pointerRef.current;
@@ -205,25 +274,9 @@ function DotGrid({
       for (const dot of dotsRef.current) {
         const dist = Math.hypot(dot.cx - pr.x, dot.cy - pr.y);
         if (speed > speedTrigger && dist < proximity && !dot._inertiaApplied) {
-          dot._inertiaApplied = true;
-          gsap.killTweensOf(dot);
           const pushX = dot.cx - pr.x + vx * 0.005;
           const pushY = dot.cy - pr.y + vy * 0.005;
-          gsap.to(dot, {
-            xOffset: pushX,
-            yOffset: pushY,
-            duration: Math.min(resistance / 1000, 0.6),
-            ease: "power2.out",
-            onComplete: () => {
-              gsap.to(dot, {
-                xOffset: 0,
-                yOffset: 0,
-                duration: returnDuration,
-                ease: "elastic.out(1,0.75)",
-              });
-              dot._inertiaApplied = false;
-            },
-          });
+          triggerPush(dot, pushX, pushY);
         }
       }
     };
@@ -235,26 +288,10 @@ function DotGrid({
       for (const dot of dotsRef.current) {
         const dist = Math.hypot(dot.cx - cx, dot.cy - cy);
         if (dist < shockRadius && !dot._inertiaApplied) {
-          dot._inertiaApplied = true;
-          gsap.killTweensOf(dot);
           const falloff = Math.max(0, 1 - dist / shockRadius);
           const pushX = (dot.cx - cx) * shockStrength * falloff;
           const pushY = (dot.cy - cy) * shockStrength * falloff;
-          gsap.to(dot, {
-            xOffset: pushX,
-            yOffset: pushY,
-            duration: Math.min(resistance / 1000, 0.6),
-            ease: "power2.out",
-            onComplete: () => {
-              gsap.to(dot, {
-                xOffset: 0,
-                yOffset: 0,
-                duration: returnDuration,
-                ease: "elastic.out(1,0.75)",
-              });
-              dot._inertiaApplied = false;
-            },
-          });
+          triggerPush(dot, pushX, pushY);
         }
       }
     };
