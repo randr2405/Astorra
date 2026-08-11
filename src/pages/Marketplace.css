@@ -8,7 +8,7 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Background shader layer (ColorBends, inlined)                       */
+/* Background shader layer (ColorBends, inlined) — kept subtle          */
 /* ------------------------------------------------------------------ */
 
 .mkt-bg-layer {
@@ -16,7 +16,7 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.55;
+  opacity: 0.18;
 }
 
 .mkt-colorbends-canvas {
