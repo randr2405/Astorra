@@ -135,13 +135,29 @@
   position: relative;
   padding: 120px 32px 100px;
   text-align: center;
+  overflow: hidden;
   --mx: 0.5;
   --my: 0.5;
 }
-.hero-spotlight {
+
+/* WebGL topography background canvas — sits behind everything else in the hero */
+.hero-topography {
   position: absolute;
   inset: 0;
   z-index: 0;
+  overflow: hidden;
+  pointer-events: auto;
+}
+.hero-topography canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
+}
+
+.hero-spotlight {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   pointer-events: none;
   background: radial-gradient(
     500px circle at calc(var(--mx) * 100%) calc(var(--my) * 100%),
@@ -150,82 +166,10 @@
   );
   transition: background 0.05s linear;
 }
-.hero-glow {
-  position: absolute;
-  z-index: 0;
-  border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.35;
-  pointer-events: none;
-}
-.hero-glow-1 {
-  width: 420px;
-  height: 420px;
-  top: -140px;
-  left: -80px;
-  background: radial-gradient(circle, var(--purple), transparent 70%);
-  animation: heroGlow1 16s ease-in-out infinite;
-  transform: translate(calc((var(--mx) - 0.5) * -40px), calc((var(--my) - 0.5) * -40px));
-}
-.hero-glow-2 {
-  width: 380px;
-  height: 380px;
-  top: -80px;
-  right: -100px;
-  background: radial-gradient(circle, var(--teal), transparent 70%);
-  animation: heroGlow2 20s ease-in-out infinite;
-  transform: translate(calc((var(--mx) - 0.5) * 40px), calc((var(--my) - 0.5) * 40px));
-}
-@keyframes heroGlow1 {
-  0%, 100% { margin: 0; }
-  50% { margin: 20px 0 0 30px; }
-}
-@keyframes heroGlow2 {
-  0%, 100% { margin: 0; }
-  50% { margin: 15px 0 0 -25px; }
-}
-.hero-threads {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  opacity: 0.7;
-  mask-image: linear-gradient(to bottom, black, transparent 90%);
-}
-.hero-threads svg {
-  width: 100%;
-  height: 100%;
-}
-.thread {
-  fill: none;
-  stroke-width: 2;
-  stroke-linecap: round;
-}
-.thread-1 {
-  stroke: var(--purple);
-  stroke-width: 2.5;
-  stroke-dasharray: 6 10;
-  animation: drift 14s linear infinite;
-}
-.thread-2 {
-  stroke: var(--blue);
-  stroke-width: 2.5;
-  stroke-dasharray: 4 8;
-  animation: drift 18s linear infinite reverse;
-}
-.thread-3 {
-  stroke: var(--teal);
-  stroke-width: 2.5;
-  stroke-dasharray: 3 12;
-  animation: drift 22s linear infinite;
-}
-@keyframes drift {
-  to {
-    stroke-dashoffset: -400;
-  }
-}
+
 .hero-content {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   max-width: 760px;
   margin: 0 auto;
 }
@@ -303,8 +247,6 @@
   .sub-reveal,
   .actions-reveal,
   .reveal,
-  .hero-glow,
-  .thread,
   .cta-magnetic {
     animation: none !important;
     transition: none !important;
@@ -719,8 +661,6 @@ h2 {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .thread,
-  .hero-glow,
   .closing-glow,
   .cta-magnetic {
     animation: none;
