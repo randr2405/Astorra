@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
+import { Link } from "react-router-dom";
 import { auth } from "../lib/firebase";
 import { supabase } from "../lib/supabaseClient";
+import { getStaffLimit } from "../lib/plans";
 import "./TeamSettings.css";
 
 function TeamSettings({ business, appUser }) {
@@ -49,10 +51,24 @@ function TeamSettings({ business, appUser }) {
     loadData();
   }, [loadData]);
 
+  const staffLimit = getStaffLimit(business.plan);
+  // Pending invites reserve a seat too, so someone can't be invited past
+  // the limit and just left unaccepted to dodge it.
+  const seatsUsed = staff.length + invites.length;
+  const atLimit = seatsUsed >= staffLimit;
+
   const handleCreateInvite = async (e) => {
     e.preventDefault();
     setInviteError("");
     setInviteSuccess("");
+
+    if (atLimit) {
+      setInviteError(
+        `You've reached your plan's staff limit (${staffLimit === Infinity ? "unlimited" : staffLimit}). Upgrade to invite more people.`
+      );
+      return;
+    }
+
     setInviteSubmitting(true);
 
     let invite = null;
@@ -71,6 +87,8 @@ function TeamSettings({ business, appUser }) {
           ? "This email already has a pending invite."
           : err.message?.includes("ONLY_OWNER_CAN_INVITE")
           ? "Only the business owner can send invites."
+          : err.message?.includes("STAFF_LIMIT_REACHED")
+          ? `You've reached your plan's staff limit (${staffLimit === Infinity ? "unlimited" : staffLimit}). Upgrade to invite more people.`
           : "Something went wrong creating the invite. Please try again."
       );
       setInviteSubmitting(false);
@@ -137,16 +155,36 @@ function TeamSettings({ business, appUser }) {
       <div className="ts-header">
         <div>
           <h2 className="ts-title">Team</h2>
-          <p className="ts-subtitle">Manage who has access to your Astorra dashboard.</p>
+          <p className="ts-subtitle">
+            Manage who has access to your Astorra dashboard.{" "}
+            <span className="ts-muted">
+              {seatsUsed} / {staffLimit === Infinity ? "∞" : staffLimit} seats used
+            </span>
+          </p>
         </div>
-        <button className="ts-btn ts-btn--primary" onClick={() => setShowInviteForm((v) => !v)}>
+        <button
+          className="ts-btn ts-btn--primary"
+          onClick={() => setShowInviteForm((v) => !v)}
+        >
           {showInviteForm ? "Cancel" : "Invite staff"}
         </button>
       </div>
 
       {error && <p className="ts-error">{error}</p>}
 
-      {showInviteForm && (
+      {showInviteForm && atLimit && (
+        <div className="ts-upgrade-prompt">
+          <p>
+            You've used all {staffLimit} seat{staffLimit === 1 ? "" : "s"} on your{" "}
+            <strong>{business.plan}</strong> plan. Upgrade your plan to invite more staff.
+          </p>
+          <Link to="/dashboard/billing" className="ts-btn ts-btn--primary ts-btn--sm">
+            Upgrade plan
+          </Link>
+        </div>
+      )}
+
+      {showInviteForm && !atLimit && (
         <form className="ts-invite-form" onSubmit={handleCreateInvite}>
           <div className="ts-form-row">
             <div className="ts-form-field">

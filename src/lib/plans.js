@@ -31,6 +31,21 @@ export const AI_ACCESS = {
   enterprise: { level: "unlimited", maxRecommendations: Infinity, monthlyCredits: Infinity },
 };
 
+// Seat limits — counts the owner + every accepted staff member + every
+// pending invite (a pending invite reserves a seat so you can't invite
+// past the limit and just leave it unaccepted). Mirrored server-side in
+// the create_staff_invite RPC since this file can't be imported there.
+export const PLAN_STAFF_LIMITS = {
+  free: 1,          // owner only, no additional staff
+  starter: 3,
+  professional: 10,
+  enterprise: Infinity,
+};
+
+export function getStaffLimit(plan) {
+  return PLAN_STAFF_LIMITS[plan] ?? PLAN_STAFF_LIMITS.free;
+}
+
 // Core installable modules (MVP scope). Category groupings mirror the
 // marketplace structure described in the brand doc (Sales, HR, Operations,
 // Finance, AI, Communication) so new modules can slot in later.
