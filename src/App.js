@@ -35,6 +35,41 @@ import Reports from "./pages/Reports";
 import Expenses from "./pages/Expenses";
 import Team from "./pages/Team";
 
+// If the initial business fetch comes back empty (no row found), retry a
+// few times with a short delay before trusting it. This covers transient
+// Supabase hiccups — e.g. a cold start or dropped connection right as a
+// PayFast/invite redirect lands on a protected route — instead of
+// immediately treating "no business" as final and bouncing to onboarding.
+const BUSINESS_FETCH_RETRIES = 3;
+const BUSINESS_FETCH_RETRY_DELAY_MS = 1000;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function fetchUserAndBusiness(firebaseUid) {
+  for (let attempt = 0; attempt <= BUSINESS_FETCH_RETRIES; attempt++) {
+    const { data, error } = await supabase
+      .from("users")
+      .select("*, businesses(*)")
+      .eq("firebase_uid", firebaseUid)
+      .maybeSingle();
+
+    if (error) {
+      console.error("fetchUserAndBusiness: query error", error);
+    } else if (data?.businesses) {
+      return data;
+    }
+
+    // No row yet (or a query error) — could be a genuinely new user with
+    // no business, or a transient failure/race. Retry a few times before
+    // accepting "no business" as the real answer.
+    if (attempt < BUSINESS_FETCH_RETRIES) {
+      await sleep(BUSINESS_FETCH_RETRY_DELAY_MS);
+    }
+  }
+
+  return null;
+}
+
 function App() {
   const [user, setUser] = useState(null);
   const [business, setBusiness] = useState(null);
@@ -60,11 +95,7 @@ function App() {
         // re-fetch so it can't overwrite fresher state (e.g. a module
         // just installed/uninstalled via Marketplace's onBusinessUpdate).
         if (!businessRef.current) {
-          const { data } = await supabase
-            .from("users")
-            .select("*, businesses(*)")
-            .eq("firebase_uid", currentUser.uid)
-            .maybeSingle();
+          const data = await fetchUserAndBusiness(currentUser.uid);
 
           if (data?.businesses) {
             setBusiness(data.businesses);
