@@ -51,8 +51,8 @@
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(120% 90% at 50% 0%, rgba(11, 15, 26, 0) 0%, rgba(11, 15, 26, 0.55) 55%, var(--navy) 100%),
-    linear-gradient(180deg, rgba(11, 15, 26, 0.25) 0%, rgba(11, 15, 26, 0.85) 100%);
+    radial-gradient(130% 100% at 50% 0%, rgba(11, 15, 26, 0) 0%, rgba(11, 15, 26, 0.15) 65%, rgba(11, 15, 26, 0.55) 100%),
+    linear-gradient(180deg, rgba(11, 15, 26, 0) 0%, rgba(11, 15, 26, 0.35) 70%, rgba(11, 15, 26, 0.7) 100%);
 }
 
 .inven-nav,
@@ -262,8 +262,8 @@
   margin-bottom: 24px;
 }
 .inven-stat-card {
-  background: rgba(17, 21, 39, 0.7);
-  backdrop-filter: blur(6px);
+  background: rgba(17, 21, 39, 0.45);
+  backdrop-filter: blur(4px);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px 20px;
@@ -503,8 +503,8 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(17, 21, 39, 0.72);
-  backdrop-filter: blur(8px);
+  background: rgba(17, 21, 39, 0.55);
+  backdrop-filter: blur(5px);
   animation: inven-fade-up 0.3s ease both;
 }
 .inven-table {
