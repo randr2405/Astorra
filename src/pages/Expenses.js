@@ -1,224 +1,157 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { Renderer, Camera, Program, Mesh, Plane, Texture } from "ogl";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import AppNav from "../components/AppNav";
 import "./Expenses.css";
 
 // ---------------------------------------------------------------------
-// GridDistortion — inlined here (no separate component file) so this
-// page has zero local imports beyond libraries already in the app.
-// Built on "ogl", which is already a project dependency — no new
-// packages required.
+// GridDistortion — inlined here (no separate component file, no extra
+// libraries). Plain Canvas 2D: slices the image into a grid and nudges
+// each cell with a wave + mouse-proximity push, redrawn every frame.
+// Canvas2D drawImage doesn't require CORS headers (only pixel-reading
+// APIs do, which this never uses), so it renders reliably regardless
+// of the image host's CORS policy.
 // ---------------------------------------------------------------------
-const distortionVertexShader = `
-attribute vec3 position;
-attribute vec2 uv;
-uniform mat4 modelViewMatrix;
-uniform mat4 projectionMatrix;
-varying vec2 vUv;
-
-void main() {
-  vUv = uv;
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}`;
-
-const distortionFragmentShader = `
-precision highp float;
-uniform sampler2D uDataTexture;
-uniform sampler2D uTexture;
-varying vec2 vUv;
-
-void main() {
-  vec2 uv = vUv;
-  vec4 offsetSample = texture2D(uDataTexture, vUv);
-  vec2 offset = (offsetSample.rg - 0.5) * 2.0;
-  gl_FragColor = texture2D(uTexture, uv - 0.02 * offset);
-}`;
-
-function GridDistortion({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 0.9, imageSrc, className = "" }) {
+function GridDistortion({ grid = 15, mouse = 0.25, strength = 0.15, relaxation = 0.9, imageSrc, className = "" }) {
   const containerRef = useRef(null);
-  const animationIdRef = useRef(null);
+  const canvasRef = useRef(null);
+  const rafRef = useRef(null);
   const resizeObserverRef = useRef(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
-
     const container = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!container || !canvas) return;
 
-    const renderer = new Renderer({ alpha: true, dpr: Math.min(window.devicePixelRatio || 1, 2) });
-    const gl = renderer.gl;
-    gl.clearColor(0, 0, 0, 0);
+    const ctx = canvas.getContext("2d");
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-    container.innerHTML = "";
-    gl.canvas.style.width = "100%";
-    gl.canvas.style.height = "100%";
-    gl.canvas.style.display = "block";
-    container.appendChild(gl.canvas);
+    let width = 0;
+    let height = 0;
+    let imgLoaded = false;
 
-    const camera = new Camera(gl, { near: 0.01, far: 1000 });
-    camera.position.z = 2;
-
-    const size = grid;
-
-    // Float accumulator for smooth physics, byte buffer for GPU upload
-    // (unsigned-byte textures avoid needing a float-texture extension).
-    const values = new Float32Array(2 * size * size);
-    for (let i = 0; i < size * size; i++) {
-      values[i * 2] = Math.random() * 40 - 20;
-      values[i * 2 + 1] = Math.random() * 40 - 20;
-    }
-    const texData = new Uint8Array(4 * size * size);
-    texData.fill(255, 0, texData.length); // alpha channel etc, overwritten below
-
-    const dataTexture = new Texture(gl, {
-      image: texData,
-      width: size,
-      height: size,
-      format: gl.RGBA,
-      type: gl.UNSIGNED_BYTE,
-      generateMipmaps: false,
-      minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST,
-      wrapS: gl.CLAMP_TO_EDGE,
-      wrapT: gl.CLAMP_TO_EDGE,
-      flipY: false,
-    });
-
-    const texture = new Texture(gl, { generateMipmaps: false, flipY: true });
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
-      texture.image = img;
-      handleResize();
+      imgLoaded = true;
     };
     img.src = imageSrc;
 
-    const geometry = new Plane(gl, { width: 1, height: 1, widthSegments: size - 1, heightSegments: size - 1 });
-
-    const program = new Program(gl, {
-      vertex: distortionVertexShader,
-      fragment: distortionFragmentShader,
-      uniforms: {
-        uTexture: { value: texture },
-        uDataTexture: { value: dataTexture },
-      },
-      transparent: true,
-      cullFace: false,
-    });
-
-    const mesh = new Mesh(gl, { geometry, program });
-
-    const handleResize = () => {
+    const resize = () => {
       const rect = container.getBoundingClientRect();
-      const width = rect.width;
-      const height = rect.height;
+      width = rect.width;
+      height = rect.height;
       if (width === 0 || height === 0) return;
-
-      renderer.setSize(width, height);
-
-      const containerAspect = width / height;
-      mesh.scale.set(containerAspect, 1, 1);
-
-      const frustumHeight = 1;
-      const frustumWidth = frustumHeight * containerAspect;
-      camera.orthographic({
-        left: -frustumWidth / 2,
-        right: frustumWidth / 2,
-        top: frustumHeight / 2,
-        bottom: -frustumHeight / 2,
-        near: 0.01,
-        far: 1000,
-      });
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
+    resize();
 
     if (window.ResizeObserver) {
-      const resizeObserver = new ResizeObserver(() => handleResize());
-      resizeObserver.observe(container);
-      resizeObserverRef.current = resizeObserver;
+      const ro = new ResizeObserver(() => resize());
+      ro.observe(container);
+      resizeObserverRef.current = ro;
     } else {
-      window.addEventListener("resize", handleResize);
+      window.addEventListener("resize", resize);
     }
 
-    const mouseState = { x: 0, y: 0, prevX: 0, prevY: 0, vX: 0, vY: 0 };
+    const mouseState = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5, active: false };
 
     const handleMouseMove = (e) => {
       const rect = container.getBoundingClientRect();
-      const x = (e.clientX - rect.left) / rect.width;
-      const y = 1 - (e.clientY - rect.top) / rect.height;
-      mouseState.vX = x - mouseState.prevX;
-      mouseState.vY = y - mouseState.prevY;
-      Object.assign(mouseState, { x, y, prevX: x, prevY: y });
+      mouseState.tx = (e.clientX - rect.left) / rect.width;
+      mouseState.ty = (e.clientY - rect.top) / rect.height;
+      mouseState.active = true;
     };
-
     const handleMouseLeave = () => {
-      Object.assign(mouseState, { x: 0, y: 0, prevX: 0, prevY: 0, vX: 0, vY: 0 });
+      mouseState.active = false;
     };
 
     container.addEventListener("mousemove", handleMouseMove);
     container.addEventListener("mouseleave", handleMouseLeave);
 
-    handleResize();
+    let time = 0;
+    const lerpSpeed = 1 - relaxation; // relaxation=0.9 -> gentle follow
 
     const animate = () => {
-      animationIdRef.current = requestAnimationFrame(animate);
+      rafRef.current = requestAnimationFrame(animate);
+      if (!imgLoaded || width === 0 || height === 0) return;
 
-      for (let i = 0; i < size * size; i++) {
-        values[i * 2] *= relaxation;
-        values[i * 2 + 1] *= relaxation;
+      time += 0.015;
+      mouseState.x += (mouseState.tx - mouseState.x) * Math.max(lerpSpeed, 0.02);
+      mouseState.y += (mouseState.ty - mouseState.y) * Math.max(lerpSpeed, 0.02);
+
+      ctx.clearRect(0, 0, width, height);
+
+      // "cover" style crop of the source image to fill the canvas
+      const imgAspect = img.naturalWidth / img.naturalHeight;
+      const canvasAspect = width / height;
+      let sx, sy, sw, sh;
+      if (imgAspect > canvasAspect) {
+        sh = img.naturalHeight;
+        sw = sh * canvasAspect;
+        sx = (img.naturalWidth - sw) / 2;
+        sy = 0;
+      } else {
+        sw = img.naturalWidth;
+        sh = sw / canvasAspect;
+        sx = 0;
+        sy = (img.naturalHeight - sh) / 2;
       }
 
-      const gridMouseX = size * mouseState.x;
-      const gridMouseY = size * mouseState.y;
-      const maxDist = size * mouse;
+      const cols = grid;
+      const rows = grid;
+      const destCellW = width / cols;
+      const destCellH = height / rows;
+      const srcCellW = sw / cols;
+      const srcCellH = sh / rows;
+      const maxDist = mouse;
 
-      for (let i = 0; i < size; i++) {
-        for (let j = 0; j < size; j++) {
-          const distSq = Math.pow(gridMouseX - i, 2) + Math.pow(gridMouseY - j, 2);
-          if (distSq < maxDist * maxDist) {
-            const index = i + size * j;
-            const power = Math.min(maxDist / Math.sqrt(distSq), 10);
-            values[index * 2] += strength * 100 * mouseState.vX * power;
-            values[index * 2 + 1] -= strength * 100 * mouseState.vY * power;
-          }
+      for (let iy = 0; iy < rows; iy++) {
+        for (let ix = 0; ix < cols; ix++) {
+          const cx = (ix + 0.5) / cols;
+          const cy = (iy + 0.5) / rows;
+
+          const dx = cx - mouseState.x;
+          const dy = cy - mouseState.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const push = mouseState.active ? Math.max(0, 1 - dist / maxDist) * strength * 60 : 0;
+
+          const waveX = Math.sin(time + ix * 0.6 + iy * 0.3) * strength * 8;
+          const waveY = Math.cos(time + ix * 0.3 - iy * 0.6) * strength * 8;
+
+          const destX = ix * destCellW + waveX - dx * push;
+          const destY = iy * destCellH + waveY - dy * push;
+
+          ctx.drawImage(
+            img,
+            sx + ix * srcCellW,
+            sy + iy * srcCellH,
+            srcCellW,
+            srcCellH,
+            destX,
+            destY,
+            destCellW + 1, // slight overdraw avoids hairline seams between cells
+            destCellH + 1
+          );
         }
       }
-
-      for (let i = 0; i < size * size; i++) {
-        const r = Math.max(-125, Math.min(125, values[i * 2]));
-        const g = Math.max(-125, Math.min(125, values[i * 2 + 1]));
-        texData[i * 4] = Math.round((r / 125) * 127 + 128);
-        texData[i * 4 + 1] = Math.round((g / 125) * 127 + 128);
-        texData[i * 4 + 2] = 128;
-        texData[i * 4 + 3] = 255;
-      }
-      dataTexture.needsUpdate = true;
-
-      renderer.render({ scene: mesh, camera });
     };
 
     animate();
 
     return () => {
-      if (animationIdRef.current) {
-        cancelAnimationFrame(animationIdRef.current);
-      }
-
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       if (resizeObserverRef.current) {
         resizeObserverRef.current.disconnect();
       } else {
-        window.removeEventListener("resize", handleResize);
+        window.removeEventListener("resize", resize);
       }
-
       container.removeEventListener("mousemove", handleMouseMove);
       container.removeEventListener("mouseleave", handleMouseLeave);
-
-      const loseContextExt = gl.getExtension("WEBGL_lose_context");
-      if (loseContextExt) loseContextExt.loseContext();
-
-      if (container.contains(gl.canvas)) {
-        container.removeChild(gl.canvas);
-      }
     };
   }, [grid, mouse, strength, relaxation, imageSrc]);
 
@@ -226,13 +159,10 @@ function GridDistortion({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
     <div
       ref={containerRef}
       className={`distortion-container ${className}`}
-      style={{
-        width: "100%",
-        height: "100%",
-        minWidth: "0",
-        minHeight: "0",
-      }}
-    />
+      style={{ width: "100%", height: "100%", minWidth: "0", minHeight: "0" }}
+    >
+      <canvas ref={canvasRef} style={{ display: "block" }} />
+    </div>
   );
 }
 
@@ -648,9 +578,9 @@ function Expenses({ business }) {
           A navy/purple gradient overlay (in CSS) keeps it on-theme. */}
       <div className="exp-bg" aria-hidden="true">
         <GridDistortion
-          imageSrc="https://picsum.photos/1920/1080?grayscale"
-          grid={10}
-          mouse={0.25}
+          imageSrc="https://picsum.photos/id/1015/1920/1080"
+          grid={12}
+          mouse={0.3}
           strength={0.15}
           relaxation={0.9}
           className="exp-bg-distortion"
