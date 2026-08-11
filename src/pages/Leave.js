@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "../lib/supabaseClient";
 import "./Leave.css";
 
@@ -30,6 +30,130 @@ const emptyRequestForm = {
   end_date: "",
   reason: "",
 };
+
+// Theme colors used for the pixel-snow flakes (kept in sync with Leave.css)
+const SNOW_COLORS = ["#7c3aed", "#3b82f6", "#14b8a6", "#e7e9ef"];
+
+/**
+ * Self-contained animated "pixel snow" background.
+ * Pure canvas + React, no external imports or libraries.
+ * Blocky, chunky flakes drift diagonally, snapped to a coarse pixel grid,
+ * rendered behind all page content (fixed, z-index 0).
+ */
+function PixelSnowBackground({
+  pixelResolution = 200,
+  density = 0.3,
+  speed = 1.25,
+  direction = 125,
+  minFlakeSize = 1.25,
+  brightness = 1,
+}) {
+  const canvasRef = useRef(null);
+  const rafRef = useRef(null);
+  const flakesRef = useRef([]);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    let width = 0;
+    let height = 0;
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let pixelSize = 4;
+
+    const dirRad = (direction * Math.PI) / 180;
+    const windX = Math.cos(dirRad);
+    const windY = Math.sin(dirRad);
+
+    const hexToRgb = (hex) => {
+      const bigint = parseInt(hex.replace("#", ""), 16);
+      return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+    };
+
+    const initFlakes = () => {
+      const area = width * height;
+      const baseCount = Math.round((area / 6000) * density * 3);
+      const count = Math.max(40, Math.min(baseCount, 260));
+      const flakes = [];
+      for (let i = 0; i < count; i++) {
+        const depth = 0.3 + Math.random() * 0.7;
+        flakes.push({
+          x: Math.random() * width,
+          y: Math.random() * height,
+          depth,
+          size: Math.max(pixelSize, minFlakeSize * pixelSize * depth * 0.5),
+          color: hexToRgb(SNOW_COLORS[Math.floor(Math.random() * SNOW_COLORS.length)]),
+          alpha: 0.35 + depth * 0.5,
+        });
+      }
+      flakesRef.current = flakes;
+    };
+
+    const resize = () => {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      pixelSize = Math.max(2, Math.round(width / pixelResolution));
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.imageSmoothingEnabled = false;
+      initFlakes();
+    };
+
+    let lastTime = performance.now();
+
+    const draw = (time) => {
+      const dt = Math.min((time - lastTime) / 1000, 0.05);
+      lastTime = time;
+
+      ctx.clearRect(0, 0, width, height);
+
+      const flakes = flakesRef.current;
+      for (let i = 0; i < flakes.length; i++) {
+        const f = flakes[i];
+        const velocity = speed * 26 * f.depth * dt;
+        f.x += windX * velocity;
+        f.y += windY * velocity + speed * 8 * f.depth * dt;
+
+        if (f.x > width + f.size) f.x = -f.size;
+        if (f.x < -f.size) f.x = width + f.size;
+        if (f.y > height + f.size) f.y = -f.size;
+        if (f.y < -f.size) f.y = width > 0 ? -f.size : -f.size;
+
+        // Snap to coarse pixel grid for the blocky "PixelSnow" look
+        const snappedX = Math.floor(f.x / pixelSize) * pixelSize;
+        const snappedY = Math.floor(f.y / pixelSize) * pixelSize;
+        const snappedSize = Math.max(pixelSize, Math.round(f.size / pixelSize) * pixelSize);
+
+        const a = f.alpha * brightness;
+        ctx.fillStyle = `rgba(${f.color.r}, ${f.color.g}, ${f.color.b}, ${a})`;
+        ctx.fillRect(snappedX, snappedY, snappedSize, snappedSize);
+      }
+
+      rafRef.current = requestAnimationFrame(draw);
+    };
+
+    resize();
+    window.addEventListener("resize", resize);
+    rafRef.current = requestAnimationFrame(draw);
+
+    return () => {
+      window.removeEventListener("resize", resize);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [pixelResolution, density, speed, direction, minFlakeSize, brightness]);
+
+  return (
+    <div className="lv-snow-bg" aria-hidden="true">
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
 
 function toDateOnly(d) {
   return d.toISOString().slice(0, 10);
@@ -322,6 +446,15 @@ export default function Leave({ business, appUser }) {
 
   return (
     <div className="lv-page">
+      <PixelSnowBackground
+        pixelResolution={200}
+        density={0.3}
+        speed={1.25}
+        direction={125}
+        minFlakeSize={1.25}
+        brightness={1}
+      />
+
       <div className="lv-body">
         <div className={`lv-header ${mounted ? "lv-in" : ""}`}>
           <div>
