@@ -21,13 +21,29 @@
 }
 
 .sup-page {
+  position: relative;
   min-height: 100vh;
   background: var(--navy);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
+  overflow: hidden;
+}
+
+/* Animated waves background layer, sits behind all page content */
+.sup-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.sup-bg .waves-canvas {
+  display: block;
 }
 
 .sup-body {
+  position: relative;
+  z-index: 1;
   max-width: 1120px;
   margin: 0 auto;
   padding: 48px 32px 80px;
