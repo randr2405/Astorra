@@ -3,6 +3,32 @@
   background: #0d0d14;
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ------------------------------------------------------------------ */
+/* Background shader layer (PixelBlast, inlined) — kept subtle          */
+/* ------------------------------------------------------------------ */
+
+.bill-bg-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.18;
+}
+
+.mkt-pixelblast-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* Everything else sits above the background */
+.bill-page > .bill-nav,
+.bill-body {
+  position: relative;
+  z-index: 1;
 }
 
 .bill-body {
@@ -44,6 +70,57 @@
   color: #f87171;
   font-size: 13.5px;
   margin-bottom: 16px;
+}
+
+.bill-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+
+.bill-status--info {
+  background: rgba(59, 130, 246, 0.1);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.25);
+}
+
+.bill-status--warn {
+  background: rgba(245, 158, 11, 0.1);
+  color: #fcd34d;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.bill-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: bill-pulse 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes bill-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.bill-inline-link {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
 }
 
 .bill-grid {
@@ -145,6 +222,61 @@
   opacity: 1;
 }
 
+.bill-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  display: inline-block;
+  animation: bill-spin 0.7s linear infinite;
+}
+
+@keyframes bill-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.bill-confirm {
+  margin-top: auto;
+}
+
+.bill-confirm p {
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
+
+.bill-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.bill-confirm-yes {
+  flex: 1;
+  border: none;
+  background: linear-gradient(135deg, #7c3aed, #3b82f6);
+  color: #fff;
+  font-weight: 600;
+  font-size: 13px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.bill-confirm-no {
+  flex: 1;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
 .bill-footnote {
   margin-top: 40px;
   padding: 20px 24px;
@@ -161,6 +293,38 @@
 
 .bill-footnote a {
   color: #3b82f6;
+}
+
+.bill-toast {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #17171f;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e7e9ef;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 500;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  animation: bill-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 50;
+}
+
+.bill-toast--success {
+  border-color: rgba(20, 184, 166, 0.35);
+}
+
+@keyframes bill-toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 12px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
 }
 
 @media (max-width: 900px) {
