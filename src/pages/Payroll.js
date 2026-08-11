@@ -1,7 +1,11 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 import jsPDF from "jspdf";
+import { gsap } from "gsap";
+import { InertiaPlugin } from "gsap/InertiaPlugin";
 import "./Payroll.css";
+
+gsap.registerPlugin(InertiaPlugin);
 
 const RUN_STATUS_OPTIONS = ["draft", "processed", "paid"];
 const RUN_STATUS_LABEL = {
@@ -9,6 +13,267 @@ const RUN_STATUS_LABEL = {
   processed: "Processed",
   paid: "Paid",
 };
+
+// ----------------------------------------------------------------------
+// DotGrid — inlined here so this page has zero local component imports
+// beyond libraries in package.json. Requires "gsap".
+// ----------------------------------------------------------------------
+const dotGridThrottle = (func, limit) => {
+  let lastCall = 0;
+  return function (...args) {
+    const now = performance.now();
+    if (now - lastCall >= limit) {
+      lastCall = now;
+      func.apply(this, args);
+    }
+  };
+};
+
+function dotGridHexToRgb(hex) {
+  const m = hex.match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!m) return { r: 0, g: 0, b: 0 };
+  return {
+    r: parseInt(m[1], 16),
+    g: parseInt(m[2], 16),
+    b: parseInt(m[3], 16),
+  };
+}
+
+function DotGrid({
+  dotSize = 16,
+  gap = 32,
+  baseColor = "#5227FF",
+  activeColor = "#5227FF",
+  proximity = 150,
+  speedTrigger = 100,
+  shockRadius = 250,
+  shockStrength = 5,
+  maxSpeed = 5000,
+  resistance = 750,
+  returnDuration = 1.5,
+  className = "",
+  style,
+}) {
+  const wrapperRef = useRef(null);
+  const canvasRef = useRef(null);
+  const dotsRef = useRef([]);
+  const pointerRef = useRef({
+    x: 0,
+    y: 0,
+    vx: 0,
+    vy: 0,
+    speed: 0,
+    lastTime: 0,
+    lastX: 0,
+    lastY: 0,
+  });
+
+  const baseRgb = useMemo(() => dotGridHexToRgb(baseColor), [baseColor]);
+  const activeRgb = useMemo(() => dotGridHexToRgb(activeColor), [activeColor]);
+
+  const circlePath = useMemo(() => {
+    if (typeof window === "undefined" || !window.Path2D) return null;
+    const p = new window.Path2D();
+    p.arc(0, 0, dotSize / 2, 0, Math.PI * 2);
+    return p;
+  }, [dotSize]);
+
+  const buildGrid = useCallback(() => {
+    const wrap = wrapperRef.current;
+    const canvas = canvasRef.current;
+    if (!wrap || !canvas) return;
+
+    const { width, height } = wrap.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+
+    canvas.width = width * dpr;
+    canvas.height = height * dpr;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    const ctx = canvas.getContext("2d");
+    if (ctx) ctx.scale(dpr, dpr);
+
+    const cols = Math.floor((width + gap) / (dotSize + gap));
+    const rows = Math.floor((height + gap) / (dotSize + gap));
+    const cell = dotSize + gap;
+
+    const gridW = cell * cols - gap;
+    const gridH = cell * rows - gap;
+
+    const extraX = width - gridW;
+    const extraY = height - gridH;
+
+    const startX = extraX / 2 + dotSize / 2;
+    const startY = extraY / 2 + dotSize / 2;
+
+    const dots = [];
+    for (let y = 0; y < rows; y++) {
+      for (let x = 0; x < cols; x++) {
+        const cx = startX + x * cell;
+        const cy = startY + y * cell;
+        dots.push({ cx, cy, xOffset: 0, yOffset: 0, _inertiaApplied: false });
+      }
+    }
+    dotsRef.current = dots;
+  }, [dotSize, gap]);
+
+  useEffect(() => {
+    if (!circlePath) return;
+
+    let rafId;
+    const proxSq = proximity * proximity;
+
+    const draw = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const { x: px, y: py } = pointerRef.current;
+
+      for (const dot of dotsRef.current) {
+        const ox = dot.cx + dot.xOffset;
+        const oy = dot.cy + dot.yOffset;
+        const dx = dot.cx - px;
+        const dy = dot.cy - py;
+        const dsq = dx * dx + dy * dy;
+
+        let style = baseColor;
+        if (dsq <= proxSq) {
+          const dist = Math.sqrt(dsq);
+          const t = 1 - dist / proximity;
+          const r = Math.round(baseRgb.r + (activeRgb.r - baseRgb.r) * t);
+          const g = Math.round(baseRgb.g + (activeRgb.g - baseRgb.g) * t);
+          const b = Math.round(baseRgb.b + (activeRgb.b - baseRgb.b) * t);
+          style = `rgb(${r},${g},${b})`;
+        }
+
+        ctx.save();
+        ctx.translate(ox, oy);
+        ctx.fillStyle = style;
+        ctx.fill(circlePath);
+        ctx.restore();
+      }
+
+      rafId = requestAnimationFrame(draw);
+    };
+
+    draw();
+    return () => cancelAnimationFrame(rafId);
+  }, [proximity, baseColor, activeRgb, baseRgb, circlePath]);
+
+  useEffect(() => {
+    buildGrid();
+    let ro = null;
+    if ("ResizeObserver" in window) {
+      ro = new ResizeObserver(buildGrid);
+      wrapperRef.current && ro.observe(wrapperRef.current);
+    } else {
+      window.addEventListener("resize", buildGrid);
+    }
+    return () => {
+      if (ro) ro.disconnect();
+      else window.removeEventListener("resize", buildGrid);
+    };
+  }, [buildGrid]);
+
+  useEffect(() => {
+    const onMove = (e) => {
+      const now = performance.now();
+      const pr = pointerRef.current;
+      const dt = pr.lastTime ? now - pr.lastTime : 16;
+      const dx = e.clientX - pr.lastX;
+      const dy = e.clientY - pr.lastY;
+      let vx = (dx / dt) * 1000;
+      let vy = (dy / dt) * 1000;
+      let speed = Math.hypot(vx, vy);
+      if (speed > maxSpeed) {
+        const scale = maxSpeed / speed;
+        vx *= scale;
+        vy *= scale;
+        speed = maxSpeed;
+      }
+      pr.lastTime = now;
+      pr.lastX = e.clientX;
+      pr.lastY = e.clientY;
+      pr.vx = vx;
+      pr.vy = vy;
+      pr.speed = speed;
+
+      const rect = canvasRef.current.getBoundingClientRect();
+      pr.x = e.clientX - rect.left;
+      pr.y = e.clientY - rect.top;
+
+      for (const dot of dotsRef.current) {
+        const dist = Math.hypot(dot.cx - pr.x, dot.cy - pr.y);
+        if (speed > speedTrigger && dist < proximity && !dot._inertiaApplied) {
+          dot._inertiaApplied = true;
+          gsap.killTweensOf(dot);
+          const pushX = dot.cx - pr.x + vx * 0.005;
+          const pushY = dot.cy - pr.y + vy * 0.005;
+          gsap.to(dot, {
+            inertia: { xOffset: pushX, yOffset: pushY, resistance },
+            onComplete: () => {
+              gsap.to(dot, {
+                xOffset: 0,
+                yOffset: 0,
+                duration: returnDuration,
+                ease: "elastic.out(1,0.75)",
+              });
+              dot._inertiaApplied = false;
+            },
+          });
+        }
+      }
+    };
+
+    const onClick = (e) => {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      for (const dot of dotsRef.current) {
+        const dist = Math.hypot(dot.cx - cx, dot.cy - cy);
+        if (dist < shockRadius && !dot._inertiaApplied) {
+          dot._inertiaApplied = true;
+          gsap.killTweensOf(dot);
+          const falloff = Math.max(0, 1 - dist / shockRadius);
+          const pushX = (dot.cx - cx) * shockStrength * falloff;
+          const pushY = (dot.cy - cy) * shockStrength * falloff;
+          gsap.to(dot, {
+            inertia: { xOffset: pushX, yOffset: pushY, resistance },
+            onComplete: () => {
+              gsap.to(dot, {
+                xOffset: 0,
+                yOffset: 0,
+                duration: returnDuration,
+                ease: "elastic.out(1,0.75)",
+              });
+              dot._inertiaApplied = false;
+            },
+          });
+        }
+      }
+    };
+
+    const throttledMove = dotGridThrottle(onMove, 50);
+    window.addEventListener("mousemove", throttledMove, { passive: true });
+    window.addEventListener("click", onClick);
+
+    return () => {
+      window.removeEventListener("mousemove", throttledMove);
+      window.removeEventListener("click", onClick);
+    };
+  }, [maxSpeed, speedTrigger, proximity, resistance, returnDuration, shockRadius, shockStrength]);
+
+  return (
+    <section className={`pay-dot-grid ${className}`} style={style}>
+      <div ref={wrapperRef} className="pay-dot-grid__wrap">
+        <canvas ref={canvasRef} className="pay-dot-grid__canvas" />
+      </div>
+    </section>
+  );
+}
 
 // ----------------------------------------------------------------------
 // PAYE / UIF calculation — SIMPLIFIED APPROXIMATION.
@@ -775,492 +1040,513 @@ export default function Payroll({ business }) {
 
   return (
     <div className="pay-page">
-      <div className="pay-body">
-        <div className={`pay-header ${mounted ? "pay-in" : ""}`}>
-          <div>
-            <p className="pay-eyebrow">Finance</p>
-            <h1 className="pay-heading">Payroll</h1>
-          </div>
-          <div className="pay-header-actions">
-            <button
-              className="pay-add-btn"
-              onClick={openCreateRun}
-              disabled={payableStaff.length === 0 || !taxTable}
-              title={!taxTable ? "Waiting for tax table to load..." : ""}
-            >
-              + New pay run
-            </button>
-          </div>
-        </div>
-
-        {taxTableLoading && (
-          <p className="pay-muted" style={{ marginBottom: 16 }}>
-            Loading current tax table...
-          </p>
-        )}
-
-        {!taxTableLoading && taxTableError && (
-          <div className="pay-empty" style={{ marginBottom: 24 }}>
-            {taxTableError}
-          </div>
-        )}
-
-        {!taxTableLoading && taxTable && (
-          <p className="pay-muted" style={{ marginBottom: 16 }}>
-            Using tax year {taxTable.tax_year} brackets.
-          </p>
-        )}
-
-        <div className={`pay-stats ${mounted ? "pay-in" : ""}`}>
-          <div className="pay-stat-card">
-            <p className="pay-stat-label">Staff on payroll</p>
-            <p className="pay-stat-value">{payableStaff.length}</p>
-          </div>
-          <div className="pay-stat-card">
-            <p className="pay-stat-label">Open pay runs</p>
-            <p className="pay-stat-value">{openDraftCount}</p>
-          </div>
-          <div className="pay-stat-card">
-            <p className="pay-stat-label">Total paid (YTD)</p>
-            <p className="pay-stat-value">R{totalPaidYtd.toFixed(2)}</p>
-          </div>
-        </div>
-
-        {!runsLoading && payableStaff.length === 0 ? (
-          <div className="pay-empty">
-            No staff are set up for payroll yet. Add an employment type and pay rate to a staff
-            member in the Staff module to include them here.
-          </div>
-        ) : !runsLoading && payRuns.length === 0 ? (
-          <div className="pay-empty">
-            No pay runs yet.{" "}
-            <button className="pay-inline-link" onClick={openCreateRun} disabled={!taxTable}>
-              Create your first one
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="pay-toolbar">
-              <div className="pay-filters">
-                <button
-                  className={`pay-filter-btn ${statusFilter === "all" ? "pay-filter-btn--active" : ""}`}
-                  onClick={() => setStatusFilter("all")}
-                >
-                  All <span className="pay-filter-count">{statusCounts.all}</span>
-                </button>
-                {RUN_STATUS_OPTIONS.map((s) => (
-                  <button
-                    key={s}
-                    className={`pay-filter-btn ${statusFilter === s ? "pay-filter-btn--active" : ""}`}
-                    onClick={() => setStatusFilter(s)}
-                  >
-                    {RUN_STATUS_LABEL[s]} <span className="pay-filter-count">{statusCounts[s]}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="pay-toolbar-right">
-                <div className="pay-search-wrap">
-                  <svg
-                    className="pay-search-icon"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <circle cx="11" cy="11" r="8" />
-                    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
-                  <input
-                    className="pay-search-input"
-                    placeholder="Search run #..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="pay-table-wrap">
-              {runsLoading ? (
-                <div className="pay-skeleton">
-                  {[...Array(4)].map((_, i) => (
-                    <div key={i} className="pay-skeleton-row" style={{ animationDelay: `${i * 0.06}s` }} />
-                  ))}
-                </div>
-              ) : (
-                <table className="pay-table">
-                  <thead>
-                    <tr>
-                      <th>Run #</th>
-                      <th>Period</th>
-                      <th>Pay date</th>
-                      <th>Status</th>
-                      <th>Net total</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredRuns.map((run, i) => (
-                      <tr
-                        key={run.id}
-                        className="pay-row"
-                        style={{ animationDelay: `${i * 0.03}s` }}
-                        onClick={() => openRunDetail(run)}
-                      >
-                        <td className="pay-name-cell">{run.run_number}</td>
-                        <td className="pay-muted">
-                          {run.period_start} – {run.period_end}
-                        </td>
-                        <td className="pay-muted">{run.pay_date}</td>
-                        <td>
-                          <span className={`pay-status pay-status--${run.status}`}>
-                            {RUN_STATUS_LABEL[run.status]}
-                          </span>
-                        </td>
-                        <td className="pay-muted">R{Number(run.total_net).toFixed(2)}</td>
-                        <td className="pay-actions-cell" onClick={(e) => e.stopPropagation()}>
-                          {confirmDeleteRunId === run.id ? (
-                            <div className="pay-confirm-row">
-                              Delete?
-                              <button className="pay-confirm-yes" onClick={() => handleDeleteRun(run.id)}>
-                                Yes
-                              </button>
-                              <button className="pay-confirm-no" onClick={() => setConfirmDeleteRunId(null)}>
-                                No
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              {run.status === "draft" && (
-                                <button
-                                  className="pay-action-btn"
-                                  onClick={() => openEditRun(run)}
-                                  disabled={!taxTable}
-                                >
-                                  Edit
-                                </button>
-                              )}
-                              <button
-                                className="pay-action-btn pay-action-btn--danger"
-                                onClick={() => setConfirmDeleteRunId(run.id)}
-                              >
-                                Delete
-                              </button>
-                            </>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </>
-        )}
+      {/* Ambient dot-grid background, sits fixed behind everything. A
+          navy/purple/blue gradient overlay (in CSS) keeps it dim and
+          on-theme, matching the rest of the app's ambient backgrounds. */}
+      <div className="pay-bg" aria-hidden="true">
+        <DotGrid
+          dotSize={5}
+          gap={15}
+          baseColor="#242032"
+          activeColor="#7C3AED"
+          proximity={120}
+          shockRadius={250}
+          shockStrength={5}
+          resistance={750}
+          returnDuration={1.5}
+          className="pay-bg-dotgrid"
+        />
+        <div className="pay-bg-overlay" />
       </div>
 
-      {/* New / edit pay run modal */}
-      {showCreateModal && (
-        <div className="pay-modal-overlay" onClick={closeCreateModal}>
-          <div className="pay-modal pay-modal--wide" onClick={(e) => e.stopPropagation()}>
-            <h2>{isEditMode ? "Edit pay run" : "New pay run"}</h2>
-            <form onSubmit={handleSaveRun}>
-              <div className="pay-input-row pay-input-row--three">
-                <div>
-                  <label className="pay-label">Period start</label>
-                  <input
-                    type="date"
-                    className="pay-input"
-                    value={createForm.period_start}
-                    onChange={(e) => setCreateForm({ ...createForm, period_start: e.target.value })}
-                  />
+      <div className="pay-content">
+        <div className="pay-body">
+          <div className={`pay-header ${mounted ? "pay-in" : ""}`}>
+            <div>
+              <p className="pay-eyebrow">Finance</p>
+              <h1 className="pay-heading">Payroll</h1>
+            </div>
+            <div className="pay-header-actions">
+              <button
+                className="pay-add-btn"
+                onClick={openCreateRun}
+                disabled={payableStaff.length === 0 || !taxTable}
+                title={!taxTable ? "Waiting for tax table to load..." : ""}
+              >
+                + New pay run
+              </button>
+            </div>
+          </div>
+
+          {taxTableLoading && (
+            <p className="pay-muted" style={{ marginBottom: 16 }}>
+              Loading current tax table...
+            </p>
+          )}
+
+          {!taxTableLoading && taxTableError && (
+            <div className="pay-empty" style={{ marginBottom: 24 }}>
+              {taxTableError}
+            </div>
+          )}
+
+          {!taxTableLoading && taxTable && (
+            <p className="pay-muted" style={{ marginBottom: 16 }}>
+              Using tax year {taxTable.tax_year} brackets.
+            </p>
+          )}
+
+          <div className={`pay-stats ${mounted ? "pay-in" : ""}`}>
+            <div className="pay-stat-card">
+              <p className="pay-stat-label">Staff on payroll</p>
+              <p className="pay-stat-value">{payableStaff.length}</p>
+            </div>
+            <div className="pay-stat-card">
+              <p className="pay-stat-label">Open pay runs</p>
+              <p className="pay-stat-value">{openDraftCount}</p>
+            </div>
+            <div className="pay-stat-card">
+              <p className="pay-stat-label">Total paid (YTD)</p>
+              <p className="pay-stat-value">R{totalPaidYtd.toFixed(2)}</p>
+            </div>
+          </div>
+
+          {!runsLoading && payableStaff.length === 0 ? (
+            <div className="pay-empty">
+              No staff are set up for payroll yet. Add an employment type and pay rate to a staff
+              member in the Staff module to include them here.
+            </div>
+          ) : !runsLoading && payRuns.length === 0 ? (
+            <div className="pay-empty">
+              No pay runs yet.{" "}
+              <button className="pay-inline-link" onClick={openCreateRun} disabled={!taxTable}>
+                Create your first one
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="pay-toolbar">
+                <div className="pay-filters">
+                  <button
+                    className={`pay-filter-btn ${statusFilter === "all" ? "pay-filter-btn--active" : ""}`}
+                    onClick={() => setStatusFilter("all")}
+                  >
+                    All <span className="pay-filter-count">{statusCounts.all}</span>
+                  </button>
+                  {RUN_STATUS_OPTIONS.map((s) => (
+                    <button
+                      key={s}
+                      className={`pay-filter-btn ${statusFilter === s ? "pay-filter-btn--active" : ""}`}
+                      onClick={() => setStatusFilter(s)}
+                    >
+                      {RUN_STATUS_LABEL[s]} <span className="pay-filter-count">{statusCounts[s]}</span>
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <label className="pay-label">Period end</label>
-                  <input
-                    type="date"
-                    className="pay-input"
-                    value={createForm.period_end}
-                    onChange={(e) => setCreateForm({ ...createForm, period_end: e.target.value })}
-                  />
-                </div>
-                <div>
-                  <label className="pay-label">Pay date</label>
-                  <input
-                    type="date"
-                    className="pay-input"
-                    value={createForm.pay_date}
-                    onChange={(e) => setCreateForm({ ...createForm, pay_date: e.target.value })}
-                  />
+
+                <div className="pay-toolbar-right">
+                  <div className="pay-search-wrap">
+                    <svg
+                      className="pay-search-icon"
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input
+                      className="pay-search-input"
+                      placeholder="Search run #..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
                 </div>
               </div>
 
-              <label className="pay-label">Staff included</label>
-              <div className="pay-staff-list">
-                {payableStaff.map((s) => {
-                  const included = includedStaffIds.includes(s.id);
-                  const isHourly = s.employment_type === "hourly";
-                  const bonusItems = bonusItemsByStaffId[s.id] || [];
-                  return (
-                    <div className="pay-staff-row-wrap" key={s.id}>
-                      <div className="pay-staff-row">
-                        <label className="pay-staff-checkbox">
-                          <input
-                            type="checkbox"
-                            checked={included}
-                            onChange={() => toggleIncludedStaff(s.id)}
-                          />
-                          <span className="pay-staff-name">{s.full_name}</span>
-                          <span className="pay-staff-meta">
-                            {isHourly ? "Hourly" : "Salaried"} · R{Number(s.pay_rate).toFixed(2)}
-                            {isHourly ? "/hr" : ` / ${s.pay_frequency || "monthly"}`}
-                          </span>
-                        </label>
-                        {included && isHourly && (
-                          <input
-                            type="number"
-                            step="0.1"
-                            min="0"
-                            className="pay-input pay-hours-input"
-                            placeholder="Hours"
-                            value={hoursByStaffId[s.id] || ""}
-                            onChange={(e) => updateHours(s.id, e.target.value)}
-                          />
-                        )}
-                        {included && !isHourly && (
-                          <input
-                            type="number"
-                            step="0.5"
-                            min="0"
-                            className="pay-input pay-days-absent-input"
-                            placeholder="Days absent"
-                            value={daysAbsentByStaffId[s.id] || ""}
-                            onChange={(e) => updateDaysAbsent(s.id, e.target.value)}
-                          />
+              <div className="pay-table-wrap">
+                {runsLoading ? (
+                  <div className="pay-skeleton">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="pay-skeleton-row" style={{ animationDelay: `${i * 0.06}s` }} />
+                    ))}
+                  </div>
+                ) : (
+                  <table className="pay-table">
+                    <thead>
+                      <tr>
+                        <th>Run #</th>
+                        <th>Period</th>
+                        <th>Pay date</th>
+                        <th>Status</th>
+                        <th>Net total</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRuns.map((run, i) => (
+                        <tr
+                          key={run.id}
+                          className="pay-row"
+                          style={{ animationDelay: `${i * 0.03}s` }}
+                          onClick={() => openRunDetail(run)}
+                        >
+                          <td className="pay-name-cell">{run.run_number}</td>
+                          <td className="pay-muted">
+                            {run.period_start} – {run.period_end}
+                          </td>
+                          <td className="pay-muted">{run.pay_date}</td>
+                          <td>
+                            <span className={`pay-status pay-status--${run.status}`}>
+                              {RUN_STATUS_LABEL[run.status]}
+                            </span>
+                          </td>
+                          <td className="pay-muted">R{Number(run.total_net).toFixed(2)}</td>
+                          <td className="pay-actions-cell" onClick={(e) => e.stopPropagation()}>
+                            {confirmDeleteRunId === run.id ? (
+                              <div className="pay-confirm-row">
+                                Delete?
+                                <button className="pay-confirm-yes" onClick={() => handleDeleteRun(run.id)}>
+                                  Yes
+                                </button>
+                                <button className="pay-confirm-no" onClick={() => setConfirmDeleteRunId(null)}>
+                                  No
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                {run.status === "draft" && (
+                                  <button
+                                    className="pay-action-btn"
+                                    onClick={() => openEditRun(run)}
+                                    disabled={!taxTable}
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                                <button
+                                  className="pay-action-btn pay-action-btn--danger"
+                                  onClick={() => setConfirmDeleteRunId(run.id)}
+                                >
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* New / edit pay run modal */}
+        {showCreateModal && (
+          <div className="pay-modal-overlay" onClick={closeCreateModal}>
+            <div className="pay-modal pay-modal--wide" onClick={(e) => e.stopPropagation()}>
+              <h2>{isEditMode ? "Edit pay run" : "New pay run"}</h2>
+              <form onSubmit={handleSaveRun}>
+                <div className="pay-input-row pay-input-row--three">
+                  <div>
+                    <label className="pay-label">Period start</label>
+                    <input
+                      type="date"
+                      className="pay-input"
+                      value={createForm.period_start}
+                      onChange={(e) => setCreateForm({ ...createForm, period_start: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="pay-label">Period end</label>
+                    <input
+                      type="date"
+                      className="pay-input"
+                      value={createForm.period_end}
+                      onChange={(e) => setCreateForm({ ...createForm, period_end: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="pay-label">Pay date</label>
+                    <input
+                      type="date"
+                      className="pay-input"
+                      value={createForm.pay_date}
+                      onChange={(e) => setCreateForm({ ...createForm, pay_date: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <label className="pay-label">Staff included</label>
+                <div className="pay-staff-list">
+                  {payableStaff.map((s) => {
+                    const included = includedStaffIds.includes(s.id);
+                    const isHourly = s.employment_type === "hourly";
+                    const bonusItems = bonusItemsByStaffId[s.id] || [];
+                    return (
+                      <div className="pay-staff-row-wrap" key={s.id}>
+                        <div className="pay-staff-row">
+                          <label className="pay-staff-checkbox">
+                            <input
+                              type="checkbox"
+                              checked={included}
+                              onChange={() => toggleIncludedStaff(s.id)}
+                            />
+                            <span className="pay-staff-name">{s.full_name}</span>
+                            <span className="pay-staff-meta">
+                              {isHourly ? "Hourly" : "Salaried"} · R{Number(s.pay_rate).toFixed(2)}
+                              {isHourly ? "/hr" : ` / ${s.pay_frequency || "monthly"}`}
+                            </span>
+                          </label>
+                          {included && isHourly && (
+                            <input
+                              type="number"
+                              step="0.1"
+                              min="0"
+                              className="pay-input pay-hours-input"
+                              placeholder="Hours"
+                              value={hoursByStaffId[s.id] || ""}
+                              onChange={(e) => updateHours(s.id, e.target.value)}
+                            />
+                          )}
+                          {included && !isHourly && (
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              className="pay-input pay-days-absent-input"
+                              placeholder="Days absent"
+                              value={daysAbsentByStaffId[s.id] || ""}
+                              onChange={(e) => updateDaysAbsent(s.id, e.target.value)}
+                            />
+                          )}
+                        </div>
+
+                        {included && (
+                          <div className="pay-bonus-section">
+                            {bonusItems.map((item) => (
+                              <div className="pay-bonus-row" key={item.id}>
+                                <input
+                                  className="pay-input pay-bonus-desc"
+                                  placeholder="Bonus / overtime description"
+                                  value={item.description}
+                                  onChange={(e) => updateBonusItem(s.id, item.id, "description", e.target.value)}
+                                />
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  className="pay-input pay-bonus-amount"
+                                  placeholder="Amount"
+                                  value={item.amount}
+                                  onChange={(e) => updateBonusItem(s.id, item.id, "amount", e.target.value)}
+                                />
+                                <button
+                                  type="button"
+                                  className="pay-bonus-remove"
+                                  onClick={() => removeBonusItem(s.id, item.id)}
+                                  aria-label="Remove line item"
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            ))}
+                            <button type="button" className="pay-bonus-add" onClick={() => addBonusItem(s.id)}>
+                              + Add bonus / overtime
+                            </button>
+                          </div>
                         )}
                       </div>
-
-                      {included && (
-                        <div className="pay-bonus-section">
-                          {bonusItems.map((item) => (
-                            <div className="pay-bonus-row" key={item.id}>
-                              <input
-                                className="pay-input pay-bonus-desc"
-                                placeholder="Bonus / overtime description"
-                                value={item.description}
-                                onChange={(e) => updateBonusItem(s.id, item.id, "description", e.target.value)}
-                              />
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                className="pay-input pay-bonus-amount"
-                                placeholder="Amount"
-                                value={item.amount}
-                                onChange={(e) => updateBonusItem(s.id, item.id, "amount", e.target.value)}
-                              />
-                              <button
-                                type="button"
-                                className="pay-bonus-remove"
-                                onClick={() => removeBonusItem(s.id, item.id)}
-                                aria-label="Remove line item"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          ))}
-                          <button type="button" className="pay-bonus-add" onClick={() => addBonusItem(s.id)}>
-                            + Add bonus / overtime
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-
-              <label className="pay-label">Notes</label>
-              <textarea
-                className="pay-input"
-                rows={2}
-                value={createForm.notes}
-                onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
-              />
-
-              <div className="pay-preview">
-                <div className="pay-preview-row">
-                  <span>Gross</span>
-                  <span>R{previewTotals.gross.toFixed(2)}</span>
+                    );
+                  })}
                 </div>
-                <div className="pay-preview-row">
-                  <span>Deductions (PAYE + UIF)</span>
-                  <span>-R{previewTotals.deductions.toFixed(2)}</span>
+
+                <label className="pay-label">Notes</label>
+                <textarea
+                  className="pay-input"
+                  rows={2}
+                  value={createForm.notes}
+                  onChange={(e) => setCreateForm({ ...createForm, notes: e.target.value })}
+                />
+
+                <div className="pay-preview">
+                  <div className="pay-preview-row">
+                    <span>Gross</span>
+                    <span>R{previewTotals.gross.toFixed(2)}</span>
+                  </div>
+                  <div className="pay-preview-row">
+                    <span>Deductions (PAYE + UIF)</span>
+                    <span>-R{previewTotals.deductions.toFixed(2)}</span>
+                  </div>
+                  <div className="pay-preview-row pay-preview-row--total">
+                    <span>Net pay</span>
+                    <span>R{previewTotals.net.toFixed(2)}</span>
+                  </div>
                 </div>
-                <div className="pay-preview-row pay-preview-row--total">
-                  <span>Net pay</span>
-                  <span>R{previewTotals.net.toFixed(2)}</span>
+
+                {createFormError && <p className="pay-error">{createFormError}</p>}
+
+                <div className="pay-modal-actions">
+                  <button type="button" className="pay-cancel-btn" onClick={closeCreateModal}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="pay-add-btn" disabled={savingRun || !taxTable}>
+                    {savingRun ? (
+                      <span className="pay-spinner" />
+                    ) : isEditMode ? (
+                      "Save changes"
+                    ) : (
+                      "Create pay run"
+                    )}
+                  </button>
                 </div>
-              </div>
-
-              {createFormError && <p className="pay-error">{createFormError}</p>}
-
-              <div className="pay-modal-actions">
-                <button type="button" className="pay-cancel-btn" onClick={closeCreateModal}>
-                  Cancel
-                </button>
-                <button type="submit" className="pay-add-btn" disabled={savingRun || !taxTable}>
-                  {savingRun ? (
-                    <span className="pay-spinner" />
-                  ) : isEditMode ? (
-                    "Save changes"
-                  ) : (
-                    "Create pay run"
-                  )}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Pay run detail drawer */}
-      {selectedRun && (
-        <div className="pay-drawer-overlay" onClick={() => setSelectedRun(null)}>
-          <div className="pay-drawer" onClick={(e) => e.stopPropagation()}>
-            <button className="pay-drawer-close" onClick={() => setSelectedRun(null)}>
-              ×
-            </button>
-            <h2>{selectedRun.run_number}</h2>
-            <p className="pay-drawer-sub">
-              {selectedRun.period_start} – {selectedRun.period_end}
-            </p>
-
-            <div className="pay-meta-grid">
-              <div className="pay-meta-item">
-                <p className="pay-meta-label">Status</p>
-                <p className="pay-meta-value">{RUN_STATUS_LABEL[selectedRun.status]}</p>
-              </div>
-              <div className="pay-meta-item">
-                <p className="pay-meta-label">Pay date</p>
-                <p className="pay-meta-value">{selectedRun.pay_date}</p>
-              </div>
-              <div className="pay-meta-item">
-                <p className="pay-meta-label">Net total</p>
-                <p className="pay-meta-value">R{Number(selectedRun.total_net).toFixed(2)}</p>
-              </div>
+              </form>
             </div>
+          </div>
+        )}
 
-            {selectedRun.status === "draft" && (
-              <button
-                className="pay-action-btn pay-edit-run-btn"
-                onClick={() => openEditRun(selectedRun)}
-                disabled={!taxTable}
-              >
-                Edit this pay run
+        {/* Pay run detail drawer */}
+        {selectedRun && (
+          <div className="pay-drawer-overlay" onClick={() => setSelectedRun(null)}>
+            <div className="pay-drawer" onClick={(e) => e.stopPropagation()}>
+              <button className="pay-drawer-close" onClick={() => setSelectedRun(null)}>
+                ×
               </button>
-            )}
+              <h2>{selectedRun.run_number}</h2>
+              <p className="pay-drawer-sub">
+                {selectedRun.period_start} – {selectedRun.period_end}
+              </p>
 
-            <div className="pay-section-header">
-              <div className="pay-section-title">Payslips</div>
-              {selectedPayslips.length > 0 && (
+              <div className="pay-meta-grid">
+                <div className="pay-meta-item">
+                  <p className="pay-meta-label">Status</p>
+                  <p className="pay-meta-value">{RUN_STATUS_LABEL[selectedRun.status]}</p>
+                </div>
+                <div className="pay-meta-item">
+                  <p className="pay-meta-label">Pay date</p>
+                  <p className="pay-meta-value">{selectedRun.pay_date}</p>
+                </div>
+                <div className="pay-meta-item">
+                  <p className="pay-meta-label">Net total</p>
+                  <p className="pay-meta-value">R{Number(selectedRun.total_net).toFixed(2)}</p>
+                </div>
+              </div>
+
+              {selectedRun.status === "draft" && (
                 <button
-                  className="pay-download-all-btn"
-                  onClick={handleDownloadAllPayslips}
-                  disabled={exportingAll}
+                  className="pay-action-btn pay-edit-run-btn"
+                  onClick={() => openEditRun(selectedRun)}
+                  disabled={!taxTable}
                 >
-                  {exportingAll ? <span className="pay-spinner" /> : "Download all (PDF)"}
+                  Edit this pay run
                 </button>
               )}
-            </div>
 
-            {runDetailLoading ? (
-              <p className="pay-log-empty">Loading...</p>
-            ) : (
-              <div className="pay-payslips">
-                {selectedPayslips.map((p) => {
-                  const bonusItems = p.payslip_line_items || [];
-                  const bonusTotal = bonusItems.reduce((sum, li) => sum + Number(li.amount || 0), 0);
-                  return (
-                    <div key={p.id} className="pay-payslip">
-                      <div className="pay-payslip-top">
-                        <span>{p.staff?.full_name || "—"}</span>
-                        <span className="pay-muted">R{Number(p.net_pay).toFixed(2)} net</span>
-                      </div>
-                      <div className="pay-payslip-meta">
-                        <span className="pay-muted">Gross R{Number(p.gross_pay).toFixed(2)}</span>
-                        <span className="pay-muted">PAYE R{Number(p.paye).toFixed(2)}</span>
-                        <span className="pay-muted">UIF R{Number(p.uif_employee).toFixed(2)}</span>
-                        {Number(p.days_absent) > 0 && (
-                          <span className="pay-badge pay-badge--absent">{p.days_absent} day(s) absent</span>
-                        )}
-                        {bonusTotal > 0 && (
-                          <span className="pay-badge pay-badge--bonus">+R{bonusTotal.toFixed(2)} bonus/OT</span>
-                        )}
-                      </div>
-                      {bonusItems.length > 0 && (
-                        <div className="pay-payslip-line-items">
-                          {bonusItems.map((li) => (
-                            <div className="pay-payslip-line-item" key={li.id}>
-                              <span>{li.description}</span>
-                              <span>R{Number(li.amount).toFixed(2)}</span>
-                            </div>
-                          ))}
+              <div className="pay-section-header">
+                <div className="pay-section-title">Payslips</div>
+                {selectedPayslips.length > 0 && (
+                  <button
+                    className="pay-download-all-btn"
+                    onClick={handleDownloadAllPayslips}
+                    disabled={exportingAll}
+                  >
+                    {exportingAll ? <span className="pay-spinner" /> : "Download all (PDF)"}
+                  </button>
+                )}
+              </div>
+
+              {runDetailLoading ? (
+                <p className="pay-log-empty">Loading...</p>
+              ) : (
+                <div className="pay-payslips">
+                  {selectedPayslips.map((p) => {
+                    const bonusItems = p.payslip_line_items || [];
+                    const bonusTotal = bonusItems.reduce((sum, li) => sum + Number(li.amount || 0), 0);
+                    return (
+                      <div key={p.id} className="pay-payslip">
+                        <div className="pay-payslip-top">
+                          <span>{p.staff?.full_name || "—"}</span>
+                          <span className="pay-muted">R{Number(p.net_pay).toFixed(2)} net</span>
                         </div>
-                      )}
-                      <button
-                        className="pay-payslip-download"
-                        onClick={() => handleDownloadPayslip(p)}
-                        disabled={exportingPayslipId === p.id}
-                      >
-                        {exportingPayslipId === p.id ? <span className="pay-spinner" /> : "Download PDF"}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                        <div className="pay-payslip-meta">
+                          <span className="pay-muted">Gross R{Number(p.gross_pay).toFixed(2)}</span>
+                          <span className="pay-muted">PAYE R{Number(p.paye).toFixed(2)}</span>
+                          <span className="pay-muted">UIF R{Number(p.uif_employee).toFixed(2)}</span>
+                          {Number(p.days_absent) > 0 && (
+                            <span className="pay-badge pay-badge--absent">{p.days_absent} day(s) absent</span>
+                          )}
+                          {bonusTotal > 0 && (
+                            <span className="pay-badge pay-badge--bonus">+R{bonusTotal.toFixed(2)} bonus/OT</span>
+                          )}
+                        </div>
+                        {bonusItems.length > 0 && (
+                          <div className="pay-payslip-line-items">
+                            {bonusItems.map((li) => (
+                              <div className="pay-payslip-line-item" key={li.id}>
+                                <span>{li.description}</span>
+                                <span>R{Number(li.amount).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <button
+                          className="pay-payslip-download"
+                          onClick={() => handleDownloadPayslip(p)}
+                          disabled={exportingPayslipId === p.id}
+                        >
+                          {exportingPayslipId === p.id ? <span className="pay-spinner" /> : "Download PDF"}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-            {selectedRun.status === "paid" && (
-              <div className="pay-drawer-actions">
-                <button
-                  className="pay-add-btn"
-                  onClick={handleLogToExpenses}
-                  disabled={loggingExpense || Boolean(selectedRun.expense_id)}
-                >
-                  {loggingExpense ? (
-                    <span className="pay-spinner" />
-                  ) : selectedRun.expense_id ? (
-                    "Logged to Expenses"
-                  ) : (
-                    "Log to Expenses"
-                  )}
-                </button>
-              </div>
-            )}
+              {selectedRun.status === "paid" && (
+                <div className="pay-drawer-actions">
+                  <button
+                    className="pay-add-btn"
+                    onClick={handleLogToExpenses}
+                    disabled={loggingExpense || Boolean(selectedRun.expense_id)}
+                  >
+                    {loggingExpense ? (
+                      <span className="pay-spinner" />
+                    ) : selectedRun.expense_id ? (
+                      "Logged to Expenses"
+                    ) : (
+                      "Log to Expenses"
+                    )}
+                  </button>
+                </div>
+              )}
 
-            {selectedRun.status === "draft" && (
-              <div className="pay-drawer-actions">
-                <button className="pay-add-btn" onClick={handleProcessRun} disabled={processing}>
-                  {processing ? <span className="pay-spinner" /> : "Mark as processed"}
-                </button>
-              </div>
-            )}
+              {selectedRun.status === "draft" && (
+                <div className="pay-drawer-actions">
+                  <button className="pay-add-btn" onClick={handleProcessRun} disabled={processing}>
+                    {processing ? <span className="pay-spinner" /> : "Mark as processed"}
+                  </button>
+                </div>
+              )}
 
-            {selectedRun.status === "processed" && (
-              <div className="pay-drawer-actions">
-                <button className="pay-add-btn" onClick={handleMarkPaid} disabled={markingPaid}>
-                  {markingPaid ? <span className="pay-spinner" /> : "Mark as paid"}
-                </button>
-              </div>
-            )}
+              {selectedRun.status === "processed" && (
+                <div className="pay-drawer-actions">
+                  <button className="pay-add-btn" onClick={handleMarkPaid} disabled={markingPaid}>
+                    {markingPaid ? <span className="pay-spinner" /> : "Mark as paid"}
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {toast && <div className="pay-toast pay-toast--success">{toast}</div>}
+        {toast && <div className="pay-toast pay-toast--success">{toast}</div>}
+      </div>
     </div>
   );
 }

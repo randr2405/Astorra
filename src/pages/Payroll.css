@@ -21,10 +21,60 @@
 }
 
 .pay-page {
+  position: relative;
   min-height: 100vh;
   background: var(--navy);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
+  overflow-x: hidden;
+}
+
+/* ---------- Ambient background layer ---------- */
+/* Fixed behind everything. The dot grid sits underneath a navy/purple/
+   blue gradient wash so it reads as part of the existing theme rather
+   than a raw canvas, and stays subtle enough for text on top. */
+.pay-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--navy);
+  pointer-events: none;
+}
+
+.pay-dot-grid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.pay-dot-grid__wrap {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.pay-dot-grid__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pay-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 0%, rgba(124, 58, 237, 0.28), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 100% 20%, rgba(59, 130, 246, 0.22), transparent 60%),
+    radial-gradient(ellipse 70% 70% at 50% 100%, rgba(20, 184, 166, 0.14), transparent 65%),
+    linear-gradient(180deg, rgba(11, 15, 26, 0.4) 0%, rgba(11, 15, 26, 0.7) 55%, rgba(11, 15, 26, 0.92) 100%);
+}
+
+/* Everything else renders above the background layer */
+.pay-content {
+  position: relative;
+  z-index: 1;
 }
 
 .pay-body {
@@ -113,10 +163,12 @@
   margin-bottom: 24px;
 }
 .pay-stat-card {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(11, 15, 26, 0.68);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px 20px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   transition: border-color 0.2s ease, transform 0.2s ease;
   animation: pay-fade-up 0.35s ease both;
 }
@@ -188,13 +240,15 @@
 }
 .pay-search-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(11, 15, 26, 0.68);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px 10px 36px;
   font-family: "Inter", sans-serif;
   font-size: 14px;
   color: #e7e9ef;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .pay-search-input::placeholder {
@@ -203,7 +257,7 @@
 .pay-search-input:focus {
   outline: none;
   border-color: var(--blue);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(11, 15, 26, 0.8);
 }
 
 /* Status filter pills */
@@ -213,7 +267,7 @@
   flex-wrap: wrap;
 }
 .pay-filter-btn {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(11, 15, 26, 0.6);
   border: 1px solid var(--border);
   color: #d7dae2;
   border-radius: 999px;
@@ -224,12 +278,14 @@
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
   white-space: nowrap;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 .pay-filter-btn:hover {
   border-color: var(--blue);
 }
 .pay-filter-btn--active {
-  background: rgba(59, 130, 246, 0.12);
+  background: rgba(59, 130, 246, 0.16);
   border-color: var(--blue);
   color: #fdfdfe;
 }
@@ -248,6 +304,9 @@
   padding: 60px 20px;
   border: 1px dashed var(--border);
   border-radius: 12px;
+  background: rgba(11, 15, 26, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   animation: pay-fade-up 0.3s ease both;
 }
 .pay-inline-link {
@@ -274,9 +333,9 @@
   border-radius: 10px;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.03) 25%,
-    rgba(255, 255, 255, 0.07) 37%,
-    rgba(255, 255, 255, 0.03) 63%
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.09) 37%,
+    rgba(255, 255, 255, 0.04) 63%
   );
   background-size: 400% 100%;
   animation: pay-shimmer 1.4s ease infinite;
@@ -294,8 +353,10 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(11, 15, 26, 0.68);
   overflow-x: auto;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   animation: pay-fade-up 0.3s ease both;
 }
 .pay-table {
@@ -339,7 +400,7 @@
   }
 }
 .pay-row:hover td {
-  background: rgba(255, 255, 255, 0.025);
+  background: rgba(255, 255, 255, 0.04);
 }
 .pay-name-cell {
   font-weight: 600;
@@ -393,7 +454,7 @@
 }
 .pay-action-btn:hover {
   border-color: var(--blue);
-  background: rgba(59, 130, 246, 0.06);
+  background: rgba(59, 130, 246, 0.08);
 }
 .pay-action-btn:active {
   transform: scale(0.97);
@@ -401,7 +462,7 @@
 .pay-action-btn--danger:hover {
   border-color: #f87171;
   color: #f87171;
-  background: rgba(248, 113, 113, 0.06);
+  background: rgba(248, 113, 113, 0.08);
 }
 
 .pay-confirm-row {
@@ -435,7 +496,9 @@
 .pay-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -454,13 +517,15 @@
 .pay-modal {
   width: 100%;
   max-width: 460px;
-  background: var(--navy-raised);
+  background: rgba(17, 21, 39, 0.92);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 32px;
   box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
   max-height: 90vh;
   overflow-y: auto;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   animation: pay-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .pay-modal--wide {
@@ -500,7 +565,7 @@
 }
 .pay-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 14px;
@@ -518,7 +583,7 @@
 .pay-input:focus {
   outline: none;
   border-color: var(--blue);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 /* Staff inclusion checklist (create/edit pay run) */
@@ -538,7 +603,7 @@
   transition: background 0.15s ease;
 }
 .pay-staff-row-wrap:hover {
-  background: rgba(255, 255, 255, 0.015);
+  background: rgba(255, 255, 255, 0.03);
 }
 .pay-staff-row {
   display: flex;
@@ -645,7 +710,7 @@
   border-radius: 10px;
   padding: 14px 16px;
   margin-bottom: 16px;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
 }
 .pay-preview-row {
   display: flex;
@@ -737,11 +802,13 @@
   width: 100%;
   max-width: 440px;
   height: 100%;
-  background: var(--navy-raised);
+  background: rgba(17, 21, 39, 0.95);
   border-left: 1px solid var(--border);
   padding: 36px 32px;
   overflow-y: auto;
   position: relative;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   animation: pay-drawer-in 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes pay-drawer-in {
@@ -790,7 +857,7 @@
   margin-bottom: 20px;
 }
 .pay-meta-item {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 14px;
@@ -863,7 +930,7 @@
   margin-bottom: 24px;
 }
 .pay-payslip {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 14px;
@@ -972,7 +1039,7 @@
   bottom: 28px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--navy-raised);
+  background: rgba(17, 21, 39, 0.95);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 22px;
@@ -981,6 +1048,8 @@
   color: #e7e9ef;
   box-shadow: 0 12px 32px -12px rgba(0, 0, 0, 0.6);
   z-index: 60;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   animation: pay-toast-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 .pay-toast--success {
@@ -1017,5 +1086,20 @@
   .pay-table th:nth-child(2),
   .pay-table td:nth-child(2) {
     display: none;
+  }
+}
+
+/* Backdrop-filter isn't supported in all browsers (older Firefox/Safari) —
+   fall back to more opaque solid panels so contrast still holds. */
+@supports not (backdrop-filter: blur(1px)) {
+  .pay-stat-card,
+  .pay-search-input,
+  .pay-filter-btn,
+  .pay-table-wrap,
+  .pay-modal,
+  .pay-drawer,
+  .pay-toast,
+  .pay-empty {
+    background: rgba(17, 21, 39, 0.94);
   }
 }
