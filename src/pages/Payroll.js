@@ -2,10 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "../lib/supabaseClient";
 import jsPDF from "jspdf";
 import { gsap } from "gsap";
-import { InertiaPlugin } from "gsap/InertiaPlugin";
 import "./Payroll.css";
-
-gsap.registerPlugin(InertiaPlugin);
 
 const RUN_STATUS_OPTIONS = ["draft", "processed", "paid"];
 const RUN_STATUS_LABEL = {
@@ -213,7 +210,10 @@ function DotGrid({
           const pushX = dot.cx - pr.x + vx * 0.005;
           const pushY = dot.cy - pr.y + vy * 0.005;
           gsap.to(dot, {
-            inertia: { xOffset: pushX, yOffset: pushY, resistance },
+            xOffset: pushX,
+            yOffset: pushY,
+            duration: Math.min(resistance / 1000, 0.6),
+            ease: "power2.out",
             onComplete: () => {
               gsap.to(dot, {
                 xOffset: 0,
@@ -241,7 +241,10 @@ function DotGrid({
           const pushX = (dot.cx - cx) * shockStrength * falloff;
           const pushY = (dot.cy - cy) * shockStrength * falloff;
           gsap.to(dot, {
-            inertia: { xOffset: pushX, yOffset: pushY, resistance },
+            xOffset: pushX,
+            yOffset: pushY,
+            duration: Math.min(resistance / 1000, 0.6),
+            ease: "power2.out",
             onComplete: () => {
               gsap.to(dot, {
                 xOffset: 0,
