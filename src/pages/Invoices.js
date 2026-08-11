@@ -85,6 +85,7 @@ function Invoices({ business, appUser }) {
   // attachments
   const [attachments, setAttachments] = useState([]);
   const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [openingAttachmentId, setOpeningAttachmentId] = useState(null);
   const fileInputRef = useRef(null);
 
   // toasts
@@ -616,9 +617,24 @@ function Invoices({ business, appUser }) {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const getAttachmentUrl = (filePath) => {
-    const { data } = supabase.storage.from(ATTACHMENT_BUCKET).getPublicUrl(filePath);
-    return data?.publicUrl;
+  // Private bucket now — files must be accessed via short-lived signed
+  // URLs (fetched on demand) rather than a permanent public URL, so
+  // attachments stay scoped to the business's own RLS policies.
+  const openAttachment = async (attachment) => {
+    setOpeningAttachmentId(attachment.id);
+
+    const { data, error: signError } = await supabase.storage
+      .from(ATTACHMENT_BUCKET)
+      .createSignedUrl(attachment.file_path, 300); // 5 min, matches Documents.js
+
+    setOpeningAttachmentId(null);
+
+    if (signError || !data?.signedUrl) {
+      pushToast(`Couldn't open attachment: ${signError?.message || "unknown error"}`, "error");
+      return;
+    }
+
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   const handleRemoveAttachment = async (attachment) => {
@@ -1105,9 +1121,15 @@ function Invoices({ business, appUser }) {
                     <div className="inv-attach-list">
                       {attachments.map((att) => (
                         <div className="inv-attach-item" key={att.id}>
-                          <a href={getAttachmentUrl(att.file_path)} target="_blank" rel="noreferrer">
+                          <button
+                            type="button"
+                            className="inv-attach-link"
+                            onClick={() => openAttachment(att)}
+                            disabled={openingAttachmentId === att.id}
+                          >
                             📎 {att.file_name}
-                          </a>
+                            {openingAttachmentId === att.id ? " (opening...)" : ""}
+                          </button>
                           <button
                             type="button"
                             className="inv-attach-remove"
