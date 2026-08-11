@@ -11,22 +11,37 @@
 }
 
 .fb-page {
+  position: relative;
   min-height: 100vh;
   background: var(--navy);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+}
+
+/* Ferrofluid WebGL background — fixed behind the whole page */
+.fb-ferrofluid {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: auto;
+}
+.fb-ferrofluid canvas {
+  width: 100% !important;
+  height: 100% !important;
+  display: block;
 }
 
 /* Nav */
 .fb-nav {
-  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  background: rgba(11, 15, 26, 0.85);
-  backdrop-filter: blur(10px);
   z-index: 10;
+  border-bottom: 1px solid var(--border);
+  background: rgba(11, 15, 26, 0.72);
+  backdrop-filter: blur(10px);
 }
 .fb-nav-inner {
   max-width: 1120px;
@@ -83,6 +98,8 @@
 
 /* Body */
 .fb-body {
+  position: relative;
+  z-index: 1;
   flex: 1;
   max-width: 620px;
   margin: 0 auto;
@@ -115,12 +132,13 @@
 
 /* Card / form */
 .fb-card {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(17, 21, 39, 0.55);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 32px;
   display: flex;
   flex-direction: column;
+  backdrop-filter: blur(14px);
 }
 
 .fb-type-row {
@@ -235,11 +253,12 @@
 
 /* Success state */
 .fb-success {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(17, 21, 39, 0.55);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 48px 32px;
   text-align: center;
+  backdrop-filter: blur(14px);
 }
 .fb-success-icon {
   width: 46px;
@@ -285,7 +304,11 @@
 
 /* Footer */
 .fb-footer {
+  position: relative;
+  z-index: 1;
   border-top: 1px solid var(--border);
+  background: rgba(11, 15, 26, 0.55);
+  backdrop-filter: blur(10px);
 }
 .fb-footer-inner {
   max-width: 1120px;
