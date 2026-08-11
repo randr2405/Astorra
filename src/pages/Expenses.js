@@ -1,157 +1,255 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import * as THREE from "three";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import AppNav from "../components/AppNav";
 import "./Expenses.css";
 
 // ---------------------------------------------------------------------
-// GridDistortion — inlined here (no separate component file, no extra
-// libraries). Plain Canvas 2D: slices the image into a grid and nudges
-// each cell with a wave + mouse-proximity push, redrawn every frame.
-// Canvas2D drawImage doesn't require CORS headers (only pixel-reading
-// APIs do, which this never uses), so it renders reliably regardless
-// of the image host's CORS policy.
+// GridDistortion — your original three.js component, inlined here (no
+// separate file) so this page has zero local imports beyond libraries
+// in package.json. Requires "three" as a dependency.
 // ---------------------------------------------------------------------
-function GridDistortion({ grid = 15, mouse = 0.25, strength = 0.15, relaxation = 0.9, imageSrc, className = "" }) {
+const distortionVertexShader = `
+uniform float time;
+varying vec2 vUv;
+varying vec3 vPosition;
+
+void main() {
+  vUv = uv;
+  vPosition = position;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+const distortionFragmentShader = `
+uniform sampler2D uDataTexture;
+uniform sampler2D uTexture;
+uniform vec4 resolution;
+varying vec2 vUv;
+
+void main() {
+  vec2 uv = vUv;
+  vec4 offset = texture2D(uDataTexture, vUv);
+  gl_FragColor = texture2D(uTexture, uv - 0.02 * offset.rg);
+}`;
+
+function GridDistortion({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 0.9, imageSrc, className = "" }) {
   const containerRef = useRef(null);
-  const canvasRef = useRef(null);
-  const rafRef = useRef(null);
+  const sceneRef = useRef(null);
+  const rendererRef = useRef(null);
+  const cameraRef = useRef(null);
+  const planeRef = useRef(null);
+  const imageAspectRef = useRef(1);
+  const animationIdRef = useRef(null);
   const resizeObserverRef = useRef(null);
 
   useEffect(() => {
+    if (!containerRef.current) return;
+
     const container = containerRef.current;
-    const canvas = canvasRef.current;
-    if (!container || !canvas) return;
 
-    const ctx = canvas.getContext("2d");
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const scene = new THREE.Scene();
+    sceneRef.current = scene;
 
-    let width = 0;
-    let height = 0;
-    let imgLoaded = false;
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: true,
+      powerPreference: "high-performance",
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setClearColor(0x000000, 0);
+    rendererRef.current = renderer;
 
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      imgLoaded = true;
+    container.innerHTML = "";
+    container.appendChild(renderer.domElement);
+
+    const camera = new THREE.OrthographicCamera(0, 0, 0, 0, -1000, 1000);
+    camera.position.z = 2;
+    cameraRef.current = camera;
+
+    const uniforms = {
+      time: { value: 0 },
+      resolution: { value: new THREE.Vector4() },
+      uTexture: { value: null },
+      uDataTexture: { value: null },
     };
-    img.src = imageSrc;
 
-    const resize = () => {
-      const rect = container.getBoundingClientRect();
-      width = rect.width;
-      height = rect.height;
-      if (width === 0 || height === 0) return;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
-      canvas.style.width = width + "px";
-      canvas.style.height = height + "px";
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    };
-    resize();
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.load(imageSrc, (texture) => {
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      imageAspectRef.current = texture.image.width / texture.image.height;
+      uniforms.uTexture.value = texture;
+      handleResize();
+    });
 
-    if (window.ResizeObserver) {
-      const ro = new ResizeObserver(() => resize());
-      ro.observe(container);
-      resizeObserverRef.current = ro;
-    } else {
-      window.addEventListener("resize", resize);
+    const size = grid;
+    const data = new Float32Array(4 * size * size);
+    for (let i = 0; i < size * size; i++) {
+      data[i * 4] = Math.random() * 255 - 125;
+      data[i * 4 + 1] = Math.random() * 255 - 125;
     }
 
-    const mouseState = { x: 0.5, y: 0.5, tx: 0.5, ty: 0.5, active: false };
+    const dataTexture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.FloatType);
+    dataTexture.needsUpdate = true;
+    uniforms.uDataTexture.value = dataTexture;
+
+    const material = new THREE.ShaderMaterial({
+      side: THREE.DoubleSide,
+      uniforms,
+      vertexShader: distortionVertexShader,
+      fragmentShader: distortionFragmentShader,
+      transparent: true,
+    });
+
+    const geometry = new THREE.PlaneGeometry(1, 1, size - 1, size - 1);
+    const plane = new THREE.Mesh(geometry, material);
+    planeRef.current = plane;
+    scene.add(plane);
+
+    const handleResize = () => {
+      if (!container || !renderer || !camera) return;
+
+      const rect = container.getBoundingClientRect();
+      const width = rect.width;
+      const height = rect.height;
+
+      if (width === 0 || height === 0) return;
+
+      const containerAspect = width / height;
+
+      renderer.setSize(width, height);
+
+      if (plane) {
+        plane.scale.set(containerAspect, 1, 1);
+      }
+
+      const frustumHeight = 1;
+      const frustumWidth = frustumHeight * containerAspect;
+      camera.left = -frustumWidth / 2;
+      camera.right = frustumWidth / 2;
+      camera.top = frustumHeight / 2;
+      camera.bottom = -frustumHeight / 2;
+      camera.updateProjectionMatrix();
+
+      uniforms.resolution.value.set(width, height, 1, 1);
+    };
+
+    if (window.ResizeObserver) {
+      const resizeObserver = new ResizeObserver(() => {
+        handleResize();
+      });
+      resizeObserver.observe(container);
+      resizeObserverRef.current = resizeObserver;
+    } else {
+      window.addEventListener("resize", handleResize);
+    }
+
+    const mouseState = {
+      x: 0,
+      y: 0,
+      prevX: 0,
+      prevY: 0,
+      vX: 0,
+      vY: 0,
+    };
 
     const handleMouseMove = (e) => {
       const rect = container.getBoundingClientRect();
-      mouseState.tx = (e.clientX - rect.left) / rect.width;
-      mouseState.ty = (e.clientY - rect.top) / rect.height;
-      mouseState.active = true;
+      const x = (e.clientX - rect.left) / rect.width;
+      const y = 1 - (e.clientY - rect.top) / rect.height;
+      mouseState.vX = x - mouseState.prevX;
+      mouseState.vY = y - mouseState.prevY;
+      Object.assign(mouseState, { x, y, prevX: x, prevY: y });
     };
+
     const handleMouseLeave = () => {
-      mouseState.active = false;
+      if (dataTexture) {
+        dataTexture.needsUpdate = true;
+      }
+      Object.assign(mouseState, {
+        x: 0,
+        y: 0,
+        prevX: 0,
+        prevY: 0,
+        vX: 0,
+        vY: 0,
+      });
     };
 
     container.addEventListener("mousemove", handleMouseMove);
     container.addEventListener("mouseleave", handleMouseLeave);
 
-    let time = 0;
-    const lerpSpeed = 1 - relaxation; // relaxation=0.9 -> gentle follow
+    handleResize();
 
     const animate = () => {
-      rafRef.current = requestAnimationFrame(animate);
-      if (!imgLoaded || width === 0 || height === 0) return;
+      animationIdRef.current = requestAnimationFrame(animate);
 
-      time += 0.015;
-      mouseState.x += (mouseState.tx - mouseState.x) * Math.max(lerpSpeed, 0.02);
-      mouseState.y += (mouseState.ty - mouseState.y) * Math.max(lerpSpeed, 0.02);
+      if (!renderer || !scene || !camera) return;
 
-      ctx.clearRect(0, 0, width, height);
+      uniforms.time.value += 0.05;
 
-      // "cover" style crop of the source image to fill the canvas
-      const imgAspect = img.naturalWidth / img.naturalHeight;
-      const canvasAspect = width / height;
-      let sx, sy, sw, sh;
-      if (imgAspect > canvasAspect) {
-        sh = img.naturalHeight;
-        sw = sh * canvasAspect;
-        sx = (img.naturalWidth - sw) / 2;
-        sy = 0;
-      } else {
-        sw = img.naturalWidth;
-        sh = sw / canvasAspect;
-        sx = 0;
-        sy = (img.naturalHeight - sh) / 2;
+      const data = dataTexture.image.data;
+      for (let i = 0; i < size * size; i++) {
+        data[i * 4] *= relaxation;
+        data[i * 4 + 1] *= relaxation;
       }
 
-      const cols = grid;
-      const rows = grid;
-      const destCellW = width / cols;
-      const destCellH = height / rows;
-      const srcCellW = sw / cols;
-      const srcCellH = sh / rows;
-      const maxDist = mouse;
+      const gridMouseX = size * mouseState.x;
+      const gridMouseY = size * mouseState.y;
+      const maxDist = size * mouse;
 
-      for (let iy = 0; iy < rows; iy++) {
-        for (let ix = 0; ix < cols; ix++) {
-          const cx = (ix + 0.5) / cols;
-          const cy = (iy + 0.5) / rows;
-
-          const dx = cx - mouseState.x;
-          const dy = cy - mouseState.y;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const push = mouseState.active ? Math.max(0, 1 - dist / maxDist) * strength * 60 : 0;
-
-          const waveX = Math.sin(time + ix * 0.6 + iy * 0.3) * strength * 8;
-          const waveY = Math.cos(time + ix * 0.3 - iy * 0.6) * strength * 8;
-
-          const destX = ix * destCellW + waveX - dx * push;
-          const destY = iy * destCellH + waveY - dy * push;
-
-          ctx.drawImage(
-            img,
-            sx + ix * srcCellW,
-            sy + iy * srcCellH,
-            srcCellW,
-            srcCellH,
-            destX,
-            destY,
-            destCellW + 1, // slight overdraw avoids hairline seams between cells
-            destCellH + 1
-          );
+      for (let i = 0; i < size; i++) {
+        for (let j = 0; j < size; j++) {
+          const distSq = Math.pow(gridMouseX - i, 2) + Math.pow(gridMouseY - j, 2);
+          if (distSq < maxDist * maxDist) {
+            const index = 4 * (i + size * j);
+            const power = Math.min(maxDist / Math.sqrt(distSq), 10);
+            data[index] += strength * 100 * mouseState.vX * power;
+            data[index + 1] -= strength * 100 * mouseState.vY * power;
+          }
         }
       }
+
+      dataTexture.needsUpdate = true;
+      renderer.render(scene, camera);
     };
 
     animate();
 
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (animationIdRef.current) {
+        cancelAnimationFrame(animationIdRef.current);
+      }
+
       if (resizeObserverRef.current) {
         resizeObserverRef.current.disconnect();
       } else {
-        window.removeEventListener("resize", resize);
+        window.removeEventListener("resize", handleResize);
       }
+
       container.removeEventListener("mousemove", handleMouseMove);
       container.removeEventListener("mouseleave", handleMouseLeave);
+
+      if (renderer) {
+        renderer.dispose();
+        renderer.forceContextLoss();
+        if (container.contains(renderer.domElement)) {
+          container.removeChild(renderer.domElement);
+        }
+      }
+
+      if (geometry) geometry.dispose();
+      if (material) material.dispose();
+      if (dataTexture) dataTexture.dispose();
+      if (uniforms.uTexture.value) uniforms.uTexture.value.dispose();
+
+      sceneRef.current = null;
+      rendererRef.current = null;
+      cameraRef.current = null;
+      planeRef.current = null;
     };
   }, [grid, mouse, strength, relaxation, imageSrc]);
 
@@ -159,10 +257,13 @@ function GridDistortion({ grid = 15, mouse = 0.25, strength = 0.15, relaxation =
     <div
       ref={containerRef}
       className={`distortion-container ${className}`}
-      style={{ width: "100%", height: "100%", minWidth: "0", minHeight: "0" }}
-    >
-      <canvas ref={canvasRef} style={{ display: "block" }} />
-    </div>
+      style={{
+        width: "100%",
+        height: "100%",
+        minWidth: "0",
+        minHeight: "0",
+      }}
+    />
   );
 }
 
