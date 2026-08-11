@@ -793,13 +793,19 @@ export default function Payroll({ business }) {
           </div>
         </div>
 
-        {taxTableError && (
+        {taxTableLoading && (
+          <p className="pay-muted" style={{ marginBottom: 16 }}>
+            Loading current tax table...
+          </p>
+        )}
+
+        {!taxTableLoading && taxTableError && (
           <div className="pay-empty" style={{ marginBottom: 24 }}>
             {taxTableError}
           </div>
         )}
 
-        {taxTable && (
+        {!taxTableLoading && taxTable && (
           <p className="pay-muted" style={{ marginBottom: 16 }}>
             Using tax year {taxTable.tax_year} brackets.
           </p>
