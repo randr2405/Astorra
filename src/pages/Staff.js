@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
@@ -24,6 +24,182 @@ const PAY_FREQUENCY_OPTIONS = [
 const STATUS_LABEL = Object.fromEntries(STATUS_OPTIONS.map((s) => [s.value, s.label]));
 const EMPLOYMENT_TYPE_LABEL = Object.fromEntries(EMPLOYMENT_TYPE_OPTIONS.map((s) => [s.value, s.label]));
 const UNASSIGNED = "Unassigned";
+
+// Theme colors used for the starfield particles (kept in sync with Staff.css)
+const GALAXY_COLORS = ["#7c3aed", "#3b82f6", "#14b8a6", "#e7e9ef"];
+
+/**
+ * Self-contained animated starfield/galaxy background.
+ * Pure canvas + React, no external imports or libraries.
+ * Renders behind all page content (fixed, z-index 0).
+ */
+function GalaxyBackground({
+  density = 1,
+  glowIntensity = 0.3,
+  twinkleIntensity = 0.3,
+  rotationSpeed = 0.1,
+  starSpeed = 0.5,
+  mouseRepulsion = true,
+  repulsionStrength = 2,
+}) {
+  const canvasRef = useRef(null);
+  const rafRef = useRef(null);
+  const starsRef = useRef([]);
+  const mouseRef = useRef({ x: -9999, y: -9999 });
+  const rotationRef = useRef(0);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    let width = 0;
+    let height = 0;
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    const initStars = () => {
+      const area = width * height;
+      const baseCount = Math.round((area / 9000) * density);
+      const count = Math.max(60, Math.min(baseCount, 420));
+      const stars = [];
+      for (let i = 0; i < count; i++) {
+        stars.push({
+          x: (Math.random() - 0.5) * width,
+          y: (Math.random() - 0.5) * height,
+          baseX: 0,
+          baseY: 0,
+          r: Math.random() * 1.3 + 0.3,
+          color: GALAXY_COLORS[Math.floor(Math.random() * GALAXY_COLORS.length)],
+          twinklePhase: Math.random() * Math.PI * 2,
+          twinkleSpeed: 0.4 + Math.random() * 1.2,
+          driftX: (Math.random() - 0.5) * starSpeed * 0.15,
+          driftY: (Math.random() - 0.5) * starSpeed * 0.15,
+        });
+      }
+      starsRef.current = stars;
+    };
+
+    const resize = () => {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      initStars();
+    };
+
+    const handleMouseMove = (e) => {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      mouseRef.current.x = e.clientX - rect.left - width / 2;
+      mouseRef.current.y = e.clientY - rect.top - height / 2;
+    };
+    const handleMouseLeave = () => {
+      mouseRef.current.x = -9999;
+      mouseRef.current.y = -9999;
+    };
+
+    let lastTime = performance.now();
+
+    const draw = (time) => {
+      const dt = Math.min((time - lastTime) / 1000, 0.05);
+      lastTime = time;
+      rotationRef.current += rotationSpeed * dt * 0.15;
+
+      ctx.clearRect(0, 0, width, height);
+      ctx.save();
+      ctx.translate(width / 2, height / 2);
+      ctx.rotate(rotationRef.current * 0.05);
+
+      const cos = Math.cos(-rotationRef.current * 0.05);
+      const sin = Math.sin(-rotationRef.current * 0.05);
+      const mx = mouseRef.current.x * cos - mouseRef.current.y * sin;
+      const my = mouseRef.current.x * sin + mouseRef.current.y * cos;
+
+      const stars = starsRef.current;
+      for (let i = 0; i < stars.length; i++) {
+        const s = stars[i];
+        s.x += s.driftX;
+        s.y += s.driftY;
+
+        if (s.x > width / 2) s.x = -width / 2;
+        if (s.x < -width / 2) s.x = width / 2;
+        if (s.y > height / 2) s.y = -height / 2;
+        if (s.y < -height / 2) s.y = height / 2;
+
+        let drawX = s.x;
+        let drawY = s.y;
+
+        if (mouseRepulsion) {
+          const dx = s.x - mx;
+          const dy = s.y - my;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const radius = 90;
+          if (dist < radius && dist > 0.01) {
+            const force = ((radius - dist) / radius) * repulsionStrength * 4;
+            drawX += (dx / dist) * force;
+            drawY += (dy / dist) * force;
+          }
+        }
+
+        s.twinklePhase += s.twinkleSpeed * dt;
+        const twinkle = 1 - twinkleIntensity + twinkleIntensity * (0.5 + 0.5 * Math.sin(s.twinklePhase));
+        const alpha = 0.5 * twinkle;
+
+        if (glowIntensity > 0) {
+          const glowR = s.r * (2.5 + glowIntensity * 5);
+          const gradient = ctx.createRadialGradient(drawX, drawY, 0, drawX, drawY, glowR);
+          gradient.addColorStop(0, hexToRgba(s.color, alpha * glowIntensity * 1.2));
+          gradient.addColorStop(1, hexToRgba(s.color, 0));
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(drawX, drawY, glowR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        ctx.beginPath();
+        ctx.fillStyle = hexToRgba(s.color, alpha + 0.3);
+        ctx.arc(drawX, drawY, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      ctx.restore();
+      rafRef.current = requestAnimationFrame(draw);
+    };
+
+    const hexToRgba = (hex, alpha) => {
+      const bigint = parseInt(hex.replace("#", ""), 16);
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
+    resize();
+    window.addEventListener("resize", resize);
+    if (mouseRepulsion) {
+      canvas.parentElement.addEventListener("mousemove", handleMouseMove);
+      canvas.parentElement.addEventListener("mouseleave", handleMouseLeave);
+    }
+    rafRef.current = requestAnimationFrame(draw);
+
+    return () => {
+      window.removeEventListener("resize", resize);
+      canvas.parentElement.removeEventListener("mousemove", handleMouseMove);
+      canvas.parentElement.removeEventListener("mouseleave", handleMouseLeave);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [density, glowIntensity, twinkleIntensity, rotationSpeed, starSpeed, mouseRepulsion, repulsionStrength]);
+
+  return (
+    <div className="staff-galaxy-bg" aria-hidden="true">
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
 
 function formatTenure(startDate) {
   if (!startDate) return null;
@@ -404,6 +580,16 @@ function Staff({ business, appUser }) {
 
   return (
     <div className="staff-page">
+      <GalaxyBackground
+        mouseRepulsion
+        density={1}
+        glowIntensity={0.3}
+        twinkleIntensity={0.3}
+        rotationSpeed={0.1}
+        repulsionStrength={2}
+        starSpeed={0.5}
+      />
+
       <AppNav business={business} />
 
       <div className="staff-body">
