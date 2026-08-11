@@ -8,7 +8,8 @@ import "./Expenses.css";
 // ---------------------------------------------------------------------
 // GridDistortion — your original three.js component, inlined here (no
 // separate file) so this page has zero local imports beyond libraries
-// in package.json. Requires "three" as a dependency.
+// in package.json. Requires "three" as a dependency. Loads a real image
+// (via THREE.TextureLoader) and warps it with the mouse-driven grid.
 // ---------------------------------------------------------------------
 const distortionVertexShader = `
 uniform float time;
@@ -33,41 +34,14 @@ void main() {
   gl_FragColor = texture2D(uTexture, uv - 0.02 * offset.rg);
 }`;
 
-// Generates the source artwork the grid warps — soft theme-colored blobs
-// on the navy base, blurred together. No external image/network request.
-function createGradientCanvas(width = 1024, height = 1024) {
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const ctx = canvas.getContext("2d");
-
-  ctx.fillStyle = "#0b0f1a";
-  ctx.fillRect(0, 0, width, height);
-
-  const blobs = [
-    { x: 0.22, y: 0.28, r: 0.6, color: "rgba(124, 58, 237, 0.9)" }, // purple
-    { x: 0.78, y: 0.22, r: 0.55, color: "rgba(59, 130, 246, 0.8)" }, // blue
-    { x: 0.62, y: 0.78, r: 0.62, color: "rgba(20, 184, 166, 0.6)" }, // teal
-    { x: 0.15, y: 0.82, r: 0.42, color: "rgba(124, 58, 237, 0.55)" }, // purple accent
-    { x: 0.48, y: 0.5, r: 0.35, color: "rgba(59, 130, 246, 0.4)" }, // blue core
-  ];
-
-  ctx.globalCompositeOperation = "lighter";
-  ctx.filter = "blur(110px)";
-  blobs.forEach((b) => {
-    const grad = ctx.createRadialGradient(b.x * width, b.y * height, 0, b.x * width, b.y * height, b.r * width);
-    grad.addColorStop(0, b.color);
-    grad.addColorStop(1, "rgba(0, 0, 0, 0)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, width, height);
-  });
-  ctx.filter = "none";
-  ctx.globalCompositeOperation = "source-over";
-
-  return canvas;
-}
-
-function GridDistortion({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 0.9, className = "" }) {
+function GridDistortion({
+  grid = 15,
+  mouse = 0.1,
+  strength = 0.15,
+  relaxation = 0.9,
+  imageSrc,
+  className = "",
+}) {
   const containerRef = useRef(null);
   const sceneRef = useRef(null);
   const rendererRef = useRef(null);
@@ -108,14 +82,16 @@ function GridDistortion({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
       uDataTexture: { value: null },
     };
 
-    const gradientCanvas = createGradientCanvas();
-    const texture = new THREE.CanvasTexture(gradientCanvas);
-    texture.minFilter = THREE.LinearFilter;
-    texture.magFilter = THREE.LinearFilter;
-    texture.wrapS = THREE.ClampToEdgeWrapping;
-    texture.wrapT = THREE.ClampToEdgeWrapping;
-    imageAspectRef.current = gradientCanvas.width / gradientCanvas.height;
-    uniforms.uTexture.value = texture;
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.load(imageSrc, (texture) => {
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      imageAspectRef.current = texture.image.width / texture.image.height;
+      uniforms.uTexture.value = texture;
+      handleResize();
+    });
 
     const size = grid;
     const data = new Float32Array(4 * size * size);
@@ -214,7 +190,7 @@ function GridDistortion({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
     container.addEventListener("mousemove", handleMouseMove);
     container.addEventListener("mouseleave", handleMouseLeave);
 
-    handleResize(); // texture is ready synchronously now, no need to wait on an image load
+    handleResize();
 
     const animate = () => {
       animationIdRef.current = requestAnimationFrame(animate);
@@ -283,7 +259,7 @@ function GridDistortion({ grid = 15, mouse = 0.1, strength = 0.15, relaxation = 
       cameraRef.current = null;
       planeRef.current = null;
     };
-  }, [grid, mouse, strength, relaxation]);
+  }, [grid, mouse, strength, relaxation, imageSrc]);
 
   return (
     <div
@@ -708,11 +684,13 @@ function Expenses({ business }) {
   return (
     <div className="exp-page">
       {/* Ambient distortion background, sits fixed behind everything.
-          A navy/purple gradient overlay (in CSS) keeps it on-theme. */}
+          A navy/purple gradient overlay (in CSS) keeps the loaded photo
+          on-theme instead of looking like a raw stock image. */}
       <div className="exp-bg" aria-hidden="true">
         <GridDistortion
-          grid={12}
-          mouse={0.3}
+          imageSrc="https://picsum.photos/1920/1080?grayscale"
+          grid={10}
+          mouse={0.25}
           strength={0.15}
           relaxation={0.9}
           className="exp-bg-distortion"
