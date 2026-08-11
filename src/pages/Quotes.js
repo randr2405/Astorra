@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { Renderer, Program, Mesh, Triangle } from "ogl";
 import { supabase } from "../lib/supabaseClient";
 import { generateNumber } from "../lib/numbering";
 import { notify } from "../lib/notifications";
@@ -29,6 +30,177 @@ function calcTotal(items) {
     0
   );
 }
+
+/* ---------------------------------------------------------------- */
+/* Animated background (LiquidChrome shader, retuned to the navy/    */
+/* purple/blue/teal theme). Kept self-contained in this file.        */
+/* ---------------------------------------------------------------- */
+
+function QuotesBackground({
+  baseColor = [0.055, 0.06, 0.11], // navy tint instead of default grey
+  speed = 0.22,
+  amplitude = 0.22,
+  frequencyX = 2.6,
+  frequencyY = 2.6,
+  interactive = true,
+}) {
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const container = containerRef.current;
+    const renderer = new Renderer({ antialias: true, alpha: true });
+    const gl = renderer.gl;
+    gl.clearColor(0, 0, 0, 0);
+
+    const vertexShader = `
+      attribute vec2 position;
+      attribute vec2 uv;
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = vec4(position, 0.0, 1.0);
+      }
+    `;
+
+    const fragmentShader = `
+      precision highp float;
+      uniform float uTime;
+      uniform vec3 uResolution;
+      uniform vec3 uBaseColor;
+      uniform float uAmplitude;
+      uniform float uFrequencyX;
+      uniform float uFrequencyY;
+      uniform vec2 uMouse;
+      uniform vec3 uTint2;
+      uniform vec3 uTint3;
+      varying vec2 vUv;
+
+      vec4 renderImage(vec2 uvCoord) {
+          vec2 fragCoord = uvCoord * uResolution.xy;
+          vec2 uv = (2.0 * fragCoord - uResolution.xy) / min(uResolution.x, uResolution.y);
+
+          for (float i = 1.0; i < 10.0; i++){
+              uv.x += uAmplitude / i * cos(i * uFrequencyX * uv.y + uTime + uMouse.x * 3.14159);
+              uv.y += uAmplitude / i * cos(i * uFrequencyY * uv.x + uTime + uMouse.y * 3.14159);
+          }
+
+          vec2 diff = (uvCoord - uMouse);
+          float dist = length(diff);
+          float falloff = exp(-dist * 20.0);
+          float ripple = sin(10.0 * dist - uTime * 2.0) * 0.03;
+          uv += (diff / (dist + 0.0001)) * ripple * falloff;
+
+          float mixer = abs(sin(uTime - uv.y - uv.x));
+          vec3 baseCol = uBaseColor / mixer;
+
+          // Blend toward purple/teal accents so it reads as "our" theme
+          vec3 accent = mix(uTint2, uTint3, 0.5 + 0.5 * sin(uv.x * 1.3 + uTime * 0.4));
+          vec3 color = mix(baseCol, accent, clamp(0.18 + 0.12 * sin(uTime * 0.6 + uv.y), 0.0, 0.4));
+
+          return vec4(color, 1.0);
+      }
+
+      void main() {
+          vec4 col = vec4(0.0);
+          int samples = 0;
+          for (int i = -1; i <= 1; i++){
+              for (int j = -1; j <= 1; j++){
+                  vec2 offset = vec2(float(i), float(j)) * (1.0 / min(uResolution.x, uResolution.y));
+                  col += renderImage(vUv + offset);
+                  samples++;
+              }
+          }
+          gl_FragColor = col / float(samples);
+      }
+    `;
+
+    const geometry = new Triangle(gl);
+    const program = new Program(gl, {
+      vertex: vertexShader,
+      fragment: fragmentShader,
+      uniforms: {
+        uTime: { value: 0 },
+        uResolution: {
+          value: new Float32Array([gl.canvas.width, gl.canvas.height, gl.canvas.width / gl.canvas.height]),
+        },
+        uBaseColor: { value: new Float32Array(baseColor) },
+        uAmplitude: { value: amplitude },
+        uFrequencyX: { value: frequencyX },
+        uFrequencyY: { value: frequencyY },
+        uMouse: { value: new Float32Array([0.5, 0.5]) },
+        uTint2: { value: new Float32Array([0.486, 0.227, 0.929]) }, // #7c3aed purple
+        uTint3: { value: new Float32Array([0.078, 0.722, 0.651]) }, // #14b8a6 teal
+      },
+    });
+    const mesh = new Mesh(gl, { geometry, program });
+
+    function resize() {
+      renderer.setSize(container.offsetWidth, container.offsetHeight);
+      const resUniform = program.uniforms.uResolution.value;
+      resUniform[0] = gl.canvas.width;
+      resUniform[1] = gl.canvas.height;
+      resUniform[2] = gl.canvas.width / gl.canvas.height;
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function handleMouseMove(event) {
+      const rect = container.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width;
+      const y = 1 - (event.clientY - rect.top) / rect.height;
+      const mouseUniform = program.uniforms.uMouse.value;
+      mouseUniform[0] = x;
+      mouseUniform[1] = y;
+    }
+
+    function handleTouchMove(event) {
+      if (event.touches.length > 0) {
+        const touch = event.touches[0];
+        const rect = container.getBoundingClientRect();
+        const x = (touch.clientX - rect.left) / rect.width;
+        const y = 1 - (touch.clientY - rect.top) / rect.height;
+        const mouseUniform = program.uniforms.uMouse.value;
+        mouseUniform[0] = x;
+        mouseUniform[1] = y;
+      }
+    }
+
+    if (interactive) {
+      container.addEventListener("mousemove", handleMouseMove);
+      container.addEventListener("touchmove", handleTouchMove);
+    }
+
+    let animationId;
+    function update(t) {
+      animationId = requestAnimationFrame(update);
+      program.uniforms.uTime.value = t * 0.001 * speed;
+      renderer.render({ scene: mesh });
+    }
+    animationId = requestAnimationFrame(update);
+
+    gl.canvas.className = "quo-bg-canvas";
+    container.appendChild(gl.canvas);
+
+    return () => {
+      cancelAnimationFrame(animationId);
+      window.removeEventListener("resize", resize);
+      if (interactive) {
+        container.removeEventListener("mousemove", handleMouseMove);
+        container.removeEventListener("touchmove", handleTouchMove);
+      }
+      if (gl.canvas.parentElement) {
+        gl.canvas.parentElement.removeChild(gl.canvas);
+      }
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+    };
+  }, [baseColor, speed, amplitude, frequencyX, frequencyY, interactive]);
+
+  return <div ref={containerRef} className="quo-bg-container" aria-hidden="true" />;
+}
+
+/* ---------------------------------------------------------------- */
 
 function Quotes({ business, appUser }) {
   const navigate = useNavigate();
@@ -452,183 +624,186 @@ function Quotes({ business, appUser }) {
 
   return (
     <div className="quo-page">
+      <QuotesBackground interactive />
       <AppNav business={business} />
 
       <div className="quo-body">
-        <div className={`quo-header ${loaded ? "quo-in" : ""}`}>
-          <div>
-            <p className="quo-eyebrow">Quotes</p>
-            <h1 className="quo-heading">Your quotes</h1>
-          </div>
-          <button
-            className="quo-add-btn"
-            onClick={openAddModal}
-            disabled={customers.length === 0}
-            title={customers.length === 0 ? "Add a customer first" : ""}
-          >
-            + New quote
-          </button>
-        </div>
-
-        {customers.length === 0 && (
-          <div className="quo-empty quo-in" style={{ marginBottom: 24 }}>
-            You need at least one customer before creating a quote.
-          </div>
-        )}
-
-        {quotes.length > 0 && (
-          <div className={`quo-toolbar ${loaded ? "quo-in" : ""}`}>
-            <div className="quo-filters">
-              {STATUS_FILTERS.map((s) => (
-                <button
-                  key={s}
-                  className={`quo-filter-btn ${statusFilter === s ? "quo-filter-btn--active" : ""}`}
-                  onClick={() => setStatusFilter(s)}
-                >
-                  {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
-                  <span className="quo-filter-count">{statusCounts[s] ?? 0}</span>
-                </button>
-              ))}
+        <div className="quo-block">
+          <div className={`quo-header ${loaded ? "quo-in" : ""}`}>
+            <div>
+              <p className="quo-eyebrow">Quotes</p>
+              <h1 className="quo-heading">Your quotes</h1>
             </div>
-
-            <div className="quo-toolbar-right">
-              <div className="quo-search">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                  <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
-                  <path d="M21 21l-4.3-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-                <input
-                  type="text"
-                  placeholder="Search quote # or customer..."
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                />
-                {query && (
-                  <button className="quo-search-clear" onClick={() => setQuery("")} aria-label="Clear search">
-                    ×
-                  </button>
-                )}
-              </div>
-
-              <select className="quo-sort-select" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
-                {SORT_OPTIONS.map((o) => (
-                  <option key={o.key} value={o.key}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-
-        {loading ? (
-          <div className="quo-table-wrap quo-in">
-            <div className="quo-skeleton">
-              {[...Array(4)].map((_, i) => (
-                <div className="quo-skeleton-row" key={i} style={{ animationDelay: `${i * 80}ms` }} />
-              ))}
-            </div>
-          </div>
-        ) : quotes.length === 0 ? (
-          <div className="quo-empty quo-in">No quotes yet. Create your first one to get started.</div>
-        ) : visibleQuotes.length === 0 ? (
-          <div className="quo-empty quo-in">
-            <p style={{ margin: "0 0 12px" }}>No quotes match your filters.</p>
             <button
-              className="quo-inline-link"
-              onClick={() => {
-                setQuery("");
-                setStatusFilter("all");
-              }}
+              className="quo-add-btn"
+              onClick={openAddModal}
+              disabled={customers.length === 0}
+              title={customers.length === 0 ? "Add a customer first" : ""}
             >
-              Clear filters
+              + New quote
             </button>
           </div>
-        ) : (
-          <div className={`quo-table-wrap ${loaded ? "quo-in" : ""}`}>
-            <table className="quo-table">
-              <thead>
-                <tr>
-                  <th>Quote #</th>
-                  <th>Customer</th>
-                  <th>Status</th>
-                  <th>Total</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleQuotes.map((q, i) => (
-                  <tr
-                    key={q.id}
-                    className="quo-row"
-                    style={{ animationDelay: loaded ? `${Math.min(i, 12) * 35}ms` : "0ms" }}
+
+          {customers.length === 0 && (
+            <div className="quo-empty quo-in" style={{ marginBottom: 24 }}>
+              You need at least one customer before creating a quote.
+            </div>
+          )}
+
+          {quotes.length > 0 && (
+            <div className={`quo-toolbar ${loaded ? "quo-in" : ""}`}>
+              <div className="quo-filters">
+                {STATUS_FILTERS.map((s) => (
+                  <button
+                    key={s}
+                    className={`quo-filter-btn ${statusFilter === s ? "quo-filter-btn--active" : ""}`}
+                    onClick={() => setStatusFilter(s)}
                   >
-                    <td className="quo-name-cell">{q.quote_number}</td>
-                    <td className={q.customers?.name ? "" : "quo-muted"}>
-                      {q.customers?.name || "—"}
-                    </td>
-                    <td>
-                      <span className={`quo-status quo-status--${q.status}`}>{q.status}</span>
-                    </td>
-                    <td className="quo-total-cell">R{Number(q.total).toFixed(2)}</td>
-                    <td>
-                      {pendingDeleteId === q.id ? (
-                        <div className="quo-confirm-row">
-                          <span>Delete {q.quote_number}?</span>
-                          <button className="quo-confirm-yes" onClick={() => handleDelete(q)}>
-                            Yes
-                          </button>
-                          <button className="quo-confirm-no" onClick={() => setPendingDeleteId(null)}>
-                            No
-                          </button>
-                        </div>
-                      ) : (
-                        <div className="quo-actions-cell">
-                          {q.status === "accepted" && (
+                    {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
+                    <span className="quo-filter-count">{statusCounts[s] ?? 0}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="quo-toolbar-right">
+                <div className="quo-search">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                    <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="2" />
+                    <path d="M21 21l-4.3-4.3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Search quote # or customer..."
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                  {query && (
+                    <button className="quo-search-clear" onClick={() => setQuery("")} aria-label="Clear search">
+                      ×
+                    </button>
+                  )}
+                </div>
+
+                <select className="quo-sort-select" value={sortKey} onChange={(e) => setSortKey(e.target.value)}>
+                  {SORT_OPTIONS.map((o) => (
+                    <option key={o.key} value={o.key}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="quo-table-wrap quo-in">
+              <div className="quo-skeleton">
+                {[...Array(4)].map((_, i) => (
+                  <div className="quo-skeleton-row" key={i} style={{ animationDelay: `${i * 80}ms` }} />
+                ))}
+              </div>
+            </div>
+          ) : quotes.length === 0 ? (
+            <div className="quo-empty quo-in">No quotes yet. Create your first one to get started.</div>
+          ) : visibleQuotes.length === 0 ? (
+            <div className="quo-empty quo-in">
+              <p style={{ margin: "0 0 12px" }}>No quotes match your filters.</p>
+              <button
+                className="quo-inline-link"
+                onClick={() => {
+                  setQuery("");
+                  setStatusFilter("all");
+                }}
+              >
+                Clear filters
+              </button>
+            </div>
+          ) : (
+            <div className={`quo-table-wrap ${loaded ? "quo-in" : ""}`}>
+              <table className="quo-table">
+                <thead>
+                  <tr>
+                    <th>Quote #</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleQuotes.map((q, i) => (
+                    <tr
+                      key={q.id}
+                      className="quo-row"
+                      style={{ animationDelay: loaded ? `${Math.min(i, 12) * 35}ms` : "0ms" }}
+                    >
+                      <td className="quo-name-cell">{q.quote_number}</td>
+                      <td className={q.customers?.name ? "" : "quo-muted"}>
+                        {q.customers?.name || "—"}
+                      </td>
+                      <td>
+                        <span className={`quo-status quo-status--${q.status}`}>{q.status}</span>
+                      </td>
+                      <td className="quo-total-cell">R{Number(q.total).toFixed(2)}</td>
+                      <td>
+                        {pendingDeleteId === q.id ? (
+                          <div className="quo-confirm-row">
+                            <span>Delete {q.quote_number}?</span>
+                            <button className="quo-confirm-yes" onClick={() => handleDelete(q)}>
+                              Yes
+                            </button>
+                            <button className="quo-confirm-no" onClick={() => setPendingDeleteId(null)}>
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="quo-actions-cell">
+                            {q.status === "accepted" && (
+                              <button
+                                className="quo-action-btn"
+                                onClick={() => handleConvertToInvoice(q)}
+                              >
+                                Convert
+                              </button>
+                            )}
+                            <button className="quo-action-btn" onClick={() => handleDownload(q)}>
+                              Download
+                            </button>
                             <button
                               className="quo-action-btn"
-                              onClick={() => handleConvertToInvoice(q)}
+                              onClick={() => handleSend(q)}
+                              disabled={sendingId === q.id || !!cooldownIds[q.id]}
+                              title={cooldownIds[q.id] ? "Sent — you can send again shortly" : ""}
                             >
-                              Convert
+                              {sendLabel(q.id)}
                             </button>
-                          )}
-                          <button className="quo-action-btn" onClick={() => handleDownload(q)}>
-                            Download
-                          </button>
-                          <button
-                            className="quo-action-btn"
-                            onClick={() => handleSend(q)}
-                            disabled={sendingId === q.id || !!cooldownIds[q.id]}
-                            title={cooldownIds[q.id] ? "Sent — you can send again shortly" : ""}
-                          >
-                            {sendLabel(q.id)}
-                          </button>
-                          <button
-                            className="quo-action-btn"
-                            onClick={() => handleDuplicate(q)}
-                            disabled={duplicatingId === q.id}
-                            title="Duplicate this quote"
-                          >
-                            {duplicatingId === q.id ? <span className="quo-spinner" /> : "Duplicate"}
-                          </button>
-                          <button className="quo-action-btn" onClick={() => openEditModal(q)}>
-                            Edit
-                          </button>
-                          <button
-                            className="quo-action-btn quo-action-btn--danger"
-                            onClick={() => setPendingDeleteId(q.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                            <button
+                              className="quo-action-btn"
+                              onClick={() => handleDuplicate(q)}
+                              disabled={duplicatingId === q.id}
+                              title="Duplicate this quote"
+                            >
+                              {duplicatingId === q.id ? <span className="quo-spinner" /> : "Duplicate"}
+                            </button>
+                            <button className="quo-action-btn" onClick={() => openEditModal(q)}>
+                              Edit
+                            </button>
+                            <button
+                              className="quo-action-btn quo-action-btn--danger"
+                              onClick={() => setPendingDeleteId(q.id)}
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {modalOpen && (

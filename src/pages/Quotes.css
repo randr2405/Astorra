@@ -16,12 +16,42 @@
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
   position: relative;
+  overflow: hidden;
+}
+
+/* Shader background — fixed behind everything, visible around the block */
+.quo-bg-container {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.quo-bg-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0.75;
 }
 
 .quo-body {
+  position: relative;
+  z-index: 2;
   max-width: 1120px;
   margin: 0 auto;
   padding: 48px 32px 80px;
+}
+
+/* The centered "block" — content sits on this raised card so the
+   liquid chrome shader shows around its edges rather than being
+   hidden behind flat panels. */
+.quo-block {
+  background: rgba(11, 15, 26, 0.72);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 36px 36px 44px;
+  backdrop-filter: blur(14px);
+  box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.02);
 }
 
 /* Reveal-on-load utility */
@@ -177,7 +207,7 @@
   padding: 9px 30px 9px 34px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
   font-size: 13px;
@@ -187,7 +217,7 @@
 .quo-search input::placeholder { color: var(--slate); }
 .quo-search input:focus {
   border-color: var(--blue);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 .quo-search-clear {
   position: absolute;
@@ -203,7 +233,7 @@
 .quo-search-clear:hover { color: #fdfdfe; }
 
 .quo-sort-select {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   color: #e7e9ef;
   border-radius: 8px;
@@ -546,9 +576,12 @@
   .quo-toolbar { flex-direction: column; align-items: stretch; }
   .quo-toolbar-right { flex-direction: column; align-items: stretch; }
   .quo-search { min-width: 0; }
+  .quo-block { padding: 24px 20px 32px; border-radius: 16px; }
+  .quo-bg-canvas { opacity: 0.55; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .quo-bg-container { display: none; }
   * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
