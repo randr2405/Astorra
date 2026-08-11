@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import { notify } from "../lib/notifications";
@@ -8,6 +8,159 @@ import "./Bookings.css";
 const STATUSES = ["confirmed", "cancelled", "completed"];
 const DEFAULT_CONFLICT_DURATION_MIN = 60;
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+// Theme colors used by the grid-scan background (kept in sync with Bookings.css)
+const GRID_LINE_COLOR = "#2b3352";
+const SCAN_COLOR_A = "#7c3aed";
+const SCAN_COLOR_B = "#14b8a6";
+
+/**
+ * Self-contained "grid scan" background: a perspective grid converging to a
+ * vanishing point, with a glowing scan-band that pulses up and down through
+ * it. Pure canvas + React, no external imports or libraries.
+ * Renders behind all page content (fixed, z-index 0).
+ */
+function GridScanBackground({
+  lineThickness = 1,
+  gridScale = 0.1,
+  scanOpacity = 0.4,
+  glowIntensity = 0.6,
+  jitter = 0.1,
+  scanSoftness = 2,
+  scanDuration = 3.5,
+}) {
+  const canvasRef = useRef(null);
+  const rafRef = useRef(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    let width = 0;
+    let height = 0;
+    let dpr = Math.min(window.devicePixelRatio || 1, 2);
+
+    const hexToRgb = (hex) => {
+      const bigint = parseInt(hex.replace("#", ""), 16);
+      return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
+    };
+    const lineRgb = hexToRgb(GRID_LINE_COLOR);
+    const scanRgbA = hexToRgb(SCAN_COLOR_A);
+    const scanRgbB = hexToRgb(SCAN_COLOR_B);
+
+    const resize = () => {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      width = rect.width;
+      height = rect.height;
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = width * dpr;
+      canvas.height = height * dpr;
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+
+    let lastTime = performance.now();
+    let elapsed = 0;
+
+    const draw = (time) => {
+      const dt = Math.min((time - lastTime) / 1000, 0.05);
+      lastTime = time;
+      elapsed += dt;
+
+      ctx.clearRect(0, 0, width, height);
+
+      const horizonY = height * 0.42;
+      const vanishX = width * 0.5;
+      const cellSize = Math.max(28, gridScale * Math.min(width, height) * 2.4);
+
+      ctx.save();
+      ctx.strokeStyle = `rgba(${lineRgb.r}, ${lineRgb.g}, ${lineRgb.b}, 0.55)`;
+      ctx.lineWidth = lineThickness;
+
+      // Horizontal lines below the horizon, spaced with perspective (denser near horizon)
+      const rows = 26;
+      for (let i = 1; i <= rows; i++) {
+        const t = i / rows;
+        const y = horizonY + Math.pow(t, 2.2) * (height - horizonY);
+        const fade = 1 - t * 0.85;
+        if (fade <= 0.02) continue;
+        const jx = jitter > 0 ? Math.sin(elapsed * 0.6 + i) * jitter * 4 : 0;
+        ctx.globalAlpha = fade;
+        ctx.beginPath();
+        ctx.moveTo(0, y + jx);
+        ctx.lineTo(width, y + jx);
+        ctx.stroke();
+      }
+
+      // Converging vertical lines from the horizon fanning down to the base
+      const cols = Math.ceil(width / cellSize) + 6;
+      const baseSpacing = width / (cols - 1);
+      for (let i = 0; i < cols; i++) {
+        const baseX = i * baseSpacing - baseSpacing * 3;
+        const t = Math.min(1, Math.abs(baseX - vanishX) / (width * 0.9));
+        const fade = 1 - t * 0.7;
+        ctx.globalAlpha = Math.max(0, fade) * 0.7;
+        ctx.beginPath();
+        ctx.moveTo(vanishX, horizonY);
+        ctx.lineTo(baseX, height);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // Scanning glow band sweeping down through the grid (ping-pong)
+      const cycle = scanDuration * 2;
+      const tCycle = (elapsed % cycle) / scanDuration;
+      const phase = tCycle <= 1 ? tCycle : 2 - tCycle;
+      const scanY = horizonY + phase * (height - horizonY);
+
+      const bandHeight = Math.max(18, 40 * scanSoftness * 0.5);
+      const mixT = (Math.sin(elapsed * 0.5) + 1) / 2;
+      const r = scanRgbA.r + (scanRgbB.r - scanRgbA.r) * mixT;
+      const g = scanRgbA.g + (scanRgbB.g - scanRgbA.g) * mixT;
+      const b = scanRgbA.b + (scanRgbB.b - scanRgbA.b) * mixT;
+
+      ctx.save();
+      const grad = ctx.createLinearGradient(0, scanY - bandHeight, 0, scanY + bandHeight);
+      grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0)`);
+      grad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${scanOpacity})`);
+      grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, scanY - bandHeight, width, bandHeight * 2);
+
+      // Bright core line with glow (bloom-ish, via layered strokes)
+      const glowLayers = Math.max(1, Math.round(glowIntensity * 6));
+      for (let i = glowLayers; i >= 1; i--) {
+        ctx.globalAlpha = (glowIntensity / glowLayers) * 0.5;
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, 1)`;
+        ctx.lineWidth = i * 2.2;
+        ctx.beginPath();
+        ctx.moveTo(0, scanY);
+        ctx.lineTo(width, scanY);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      rafRef.current = requestAnimationFrame(draw);
+    };
+
+    resize();
+    window.addEventListener("resize", resize);
+    rafRef.current = requestAnimationFrame(draw);
+
+    return () => {
+      window.removeEventListener("resize", resize);
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, [lineThickness, gridScale, scanOpacity, glowIntensity, jitter, scanSoftness, scanDuration]);
+
+  return (
+    <div className="book-grid-bg" aria-hidden="true">
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
 
 function toDateKey(input) {
   const d = input instanceof Date ? input : new Date(input);
@@ -507,6 +660,16 @@ function Bookings({ business, appUser }) {
 
   return (
     <div className="book-page">
+      <GridScanBackground
+        lineThickness={1}
+        gridScale={0.1}
+        scanOpacity={0.4}
+        glowIntensity={0.6}
+        jitter={0.1}
+        scanSoftness={2}
+        scanDuration={3.5}
+      />
+
       <AppNav business={business} />
 
       <div className="book-body">
