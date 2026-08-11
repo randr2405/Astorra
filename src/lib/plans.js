@@ -102,4 +102,4 @@ export function getAiAccess(plan) {
 
 export function hasAiAccess(plan) {
   return getAiAccess(plan).level !== "none";
-}mmit  
+}
