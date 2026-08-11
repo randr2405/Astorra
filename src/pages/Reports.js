@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "../lib/supabaseClient";
 import AppNav from "../components/AppNav";
+import GradientBlinds from "./GradientBlinds";
 import "./Reports.css";
 
 const currency = new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" });
@@ -229,6 +230,23 @@ function Reports({ business }) {
 
   return (
     <div className="rep-page">
+      <div className="rep-bg">
+        <GradientBlinds
+          gradientColors={["#7c3aed", "#3b82f6", "#14b8a6"]}
+          angle={20}
+          noise={0.5}
+          blindCount={16}
+          blindMinWidth={60}
+          spotlightRadius={0.5}
+          spotlightSoftness={1}
+          spotlightOpacity={1}
+          mouseDampening={0.15}
+          distortAmount={0}
+          shineDirection="left"
+          mixBlendMode="lighten"
+        />
+      </div>
+
       <AppNav business={business} />
 
       <div className="rep-body">
