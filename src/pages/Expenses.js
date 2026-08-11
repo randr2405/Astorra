@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "../lib/supabaseClient";
 import AppNav from "../components/AppNav";
+import GridDistortion from "../components/GridDistortion";
 import "./Expenses.css";
 
 const currency = new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" });
@@ -412,338 +413,354 @@ function Expenses({ business }) {
 
   return (
     <div className="exp-page">
-      <AppNav business={business} />
+      {/* Ambient distortion background, sits fixed behind everything.
+          A navy/purple gradient overlay (in CSS) keeps it on-theme. */}
+      <div className="exp-bg" aria-hidden="true">
+        <GridDistortion
+          imageSrc="https://picsum.photos/1920/1080?grayscale"
+          grid={10}
+          mouse={0.25}
+          strength={0.15}
+          relaxation={0.9}
+          className="exp-bg-distortion"
+        />
+        <div className="exp-bg-overlay" />
+      </div>
 
-      <div className="exp-body">
-        <div className="exp-header">
-          <div>
-            <p className="exp-eyebrow">Expenses</p>
-            <h1 className="exp-heading">What you're spending</h1>
-          </div>
-          <div className="exp-header-actions">
-            <button className="exp-secondary-btn" onClick={exportCsv} disabled={visibleExpenses.length === 0}>
-              Export
-            </button>
-            <button className="exp-add-btn" onClick={openAddModal}>
-              + Add expense
-            </button>
-          </div>
-        </div>
+      <div className="exp-content">
+        <AppNav business={business} />
 
-        <div className="exp-stats">
-          <div className="exp-stat-card">
-            <p className="exp-stat-label">Total income (paid)</p>
-            <p className="exp-stat-value">{currency.format(paidInvoicesTotal)}</p>
-          </div>
-          <div className="exp-stat-card">
-            <p className="exp-stat-label">
-              {rangeKey === "all" ? "Total expenses" : "Expenses (selected range)"}
-            </p>
-            <p className="exp-stat-value">{currency.format(stats.totalExpenses)}</p>
-          </div>
-          <div className={`exp-stat-card ${stats.netProfit < 0 ? "exp-stat-card--warn" : "exp-stat-card--positive"}`}>
-            <p className="exp-stat-label">Net profit</p>
-            <p className="exp-stat-value">{currency.format(stats.netProfit)}</p>
-          </div>
-          <div className="exp-stat-card">
-            <p className="exp-stat-label">This month</p>
-            <p className="exp-stat-value">{currency.format(stats.thisMonthExpenses)}</p>
-          </div>
-        </div>
-
-        <div className="exp-toolbar">
-          <div className="exp-search-wrap">
-            <svg className="exp-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
-            <input
-              className="exp-search-input"
-              placeholder="Search vendor or description..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-
-          <select className="exp-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-            <option value="all">All categories</option>
-            {CATEGORIES.filter((c) => c.key !== "other").map((c) => (
-              <option key={c.key} value={c.key}>
-                {c.label}
-              </option>
-            ))}
-            <option value="other">Other</option>
-          </select>
-
-          <select className="exp-select" value={rangeKey} onChange={(e) => setRangeKey(e.target.value)}>
-            {RANGE_OPTIONS.map((r) => (
-              <option key={r.key} value={r.key}>
-                {r.label}
-              </option>
-            ))}
-          </select>
-
-          {rangeKey === "custom" && (
-            <>
-              <input
-                className="exp-select exp-date-input"
-                type="date"
-                value={customStart}
-                onChange={(e) => setCustomStart(e.target.value)}
-              />
-              <span className="exp-range-sep">to</span>
-              <input
-                className="exp-select exp-date-input"
-                type="date"
-                value={customEnd}
-                onChange={(e) => setCustomEnd(e.target.value)}
-              />
-            </>
-          )}
-
-          <select className="exp-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-            <option value="date_desc">Newest first</option>
-            <option value="date_asc">Oldest first</option>
-            <option value="amount_desc">Highest amount</option>
-            <option value="amount_asc">Lowest amount</option>
-          </select>
-
-          {hasActiveFilters && (
-            <button className="exp-clear-filters" onClick={clearFilters}>
-              Clear filters
-            </button>
-          )}
-        </div>
-
-        {selectedIds.length > 0 && (
-          <div className="exp-bulkbar">
-            <span className="exp-bulkbar-count">
-              {selectedIds.length} selected
-            </span>
-            <div className="exp-bulkbar-actions">
-              <button className="exp-action-btn exp-action-btn--danger" onClick={handleBulkDelete}>
-                Delete selected
+        <div className="exp-body">
+          <div className="exp-header">
+            <div>
+              <p className="exp-eyebrow">Expenses</p>
+              <h1 className="exp-heading">What you're spending</h1>
+            </div>
+            <div className="exp-header-actions">
+              <button className="exp-secondary-btn" onClick={exportCsv} disabled={visibleExpenses.length === 0}>
+                Export
+              </button>
+              <button className="exp-add-btn" onClick={openAddModal}>
+                + Add expense
               </button>
             </div>
           </div>
-        )}
 
-        {loading ? (
-          <div className="exp-skeleton">
-            {[0, 1, 2, 3, 4].map((i) => (
-              <div className="exp-skeleton-row" key={i} style={{ animationDelay: `${i * 0.05}s` }} />
-            ))}
+          <div className="exp-stats">
+            <div className="exp-stat-card">
+              <p className="exp-stat-label">Total income (paid)</p>
+              <p className="exp-stat-value">{currency.format(paidInvoicesTotal)}</p>
+            </div>
+            <div className="exp-stat-card">
+              <p className="exp-stat-label">
+                {rangeKey === "all" ? "Total expenses" : "Expenses (selected range)"}
+              </p>
+              <p className="exp-stat-value">{currency.format(stats.totalExpenses)}</p>
+            </div>
+            <div className={`exp-stat-card ${stats.netProfit < 0 ? "exp-stat-card--warn" : "exp-stat-card--positive"}`}>
+              <p className="exp-stat-label">Net profit</p>
+              <p className="exp-stat-value">{currency.format(stats.netProfit)}</p>
+            </div>
+            <div className="exp-stat-card">
+              <p className="exp-stat-label">This month</p>
+              <p className="exp-stat-value">{currency.format(stats.thisMonthExpenses)}</p>
+            </div>
           </div>
-        ) : visibleExpenses.length === 0 ? (
-          <div className="exp-empty">
-            <p>{expenses.length === 0 ? "No expenses logged yet." : "No expenses match your filters."}</p>
-            <p className="exp-empty-sub">
-              {expenses.length === 0
-                ? "Add your first expense to start tracking what you spend."
-                : "Try adjusting your search, category, or date range."}
-            </p>
-          </div>
-        ) : (
-          <div className="exp-table-wrap">
-            <table className="exp-table">
-              <thead>
-                <tr>
-                  <th className="exp-th-check">
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.length === visibleExpenses.length && visibleExpenses.length > 0}
-                      onChange={toggleSelectAll}
-                    />
-                  </th>
-                  <th>Date</th>
-                  <th>Category</th>
-                  <th>Vendor</th>
-                  <th>Description</th>
-                  <th>Amount</th>
-                  <th>Receipt</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {visibleExpenses.map((e, i) => (
-                  <tr className="exp-row" key={e.id} style={{ animationDelay: `${Math.min(i, 8) * 0.03}s` }}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.includes(e.id)}
-                        onChange={() => toggleSelect(e.id)}
-                      />
-                    </td>
-                    <td>{formatDate(e.expense_date)}</td>
-                    <td>
-                      <span className="exp-category-pill">
-                        {CATEGORY_LABELS[e.category] || e.category}
-                      </span>
-                      {e.is_recurring && (
-                        <span className="exp-recurring-pill" title={`Repeats ${e.recurring_frequency}`}>
-                          ↻ {e.recurring_frequency === "weekly" ? "Weekly" : "Monthly"}
-                        </span>
-                      )}
-                    </td>
-                    <td className="exp-muted">{e.vendor || "—"}</td>
-                    <td className="exp-muted">{e.description || "—"}</td>
-                    <td className="exp-name-cell">{currency.format(e.amount)}</td>
-                    <td>
-                      {e.receipt_path ? (
-                        <button className="exp-link" onClick={() => viewReceipt(e)}>
-                          View
-                        </button>
-                      ) : (
-                        <span className="exp-muted">—</span>
-                      )}
-                    </td>
-                    <td className="exp-actions-cell">
-                      <button className="exp-action-btn" onClick={() => openDuplicateModal(e)}>
-                        Duplicate
-                      </button>
-                      <button className="exp-action-btn" onClick={() => openEditModal(e)}>
-                        Edit
-                      </button>
-                      <button className="exp-action-btn exp-action-btn--danger" onClick={() => handleDelete(e)}>
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
 
-      {modalOpen && (
-        <div className="exp-modal-overlay" onClick={closeModal}>
-          <div className="exp-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>{form.id ? "Edit expense" : "Add expense"}</h2>
+          <div className="exp-toolbar">
+            <div className="exp-search-wrap">
+              <svg className="exp-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                className="exp-search-input"
+                placeholder="Search vendor or description..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
 
-            {error && <p className="exp-error">{error}</p>}
-
-            <label className="exp-label">Category</label>
-            <select
-              className="exp-input exp-input--select"
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-            >
-              {CATEGORIES.map((c) => (
+            <select className="exp-select" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+              <option value="all">All categories</option>
+              {CATEGORIES.filter((c) => c.key !== "other").map((c) => (
                 <option key={c.key} value={c.key}>
                   {c.label}
                 </option>
               ))}
+              <option value="other">Other</option>
             </select>
 
-            {form.category === "other" && (
+            <select className="exp-select" value={rangeKey} onChange={(e) => setRangeKey(e.target.value)}>
+              {RANGE_OPTIONS.map((r) => (
+                <option key={r.key} value={r.key}>
+                  {r.label}
+                </option>
+              ))}
+            </select>
+
+            {rangeKey === "custom" && (
               <>
-                <label className="exp-label">Custom category</label>
                 <input
-                  className="exp-input"
-                  placeholder="e.g. Software subscriptions"
-                  value={form.customCategory}
-                  onChange={(e) => setForm({ ...form, customCategory: e.target.value })}
+                  className="exp-select exp-date-input"
+                  type="date"
+                  value={customStart}
+                  onChange={(e) => setCustomStart(e.target.value)}
+                />
+                <span className="exp-range-sep">to</span>
+                <input
+                  className="exp-select exp-date-input"
+                  type="date"
+                  value={customEnd}
+                  onChange={(e) => setCustomEnd(e.target.value)}
                 />
               </>
             )}
 
-            <div className="exp-input-row">
-              <div>
-                <label className="exp-label">Amount (R)</label>
-                <input
-                  className="exp-input"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={form.amount}
-                  onChange={(e) => setForm({ ...form, amount: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className="exp-label">VAT (R, optional)</label>
-                <input
-                  className="exp-input"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0.00"
-                  value={form.vat_amount}
-                  onChange={(e) => setForm({ ...form, vat_amount: e.target.value })}
-                />
+            <select className="exp-select" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="date_desc">Newest first</option>
+              <option value="date_asc">Oldest first</option>
+              <option value="amount_desc">Highest amount</option>
+              <option value="amount_asc">Lowest amount</option>
+            </select>
+
+            {hasActiveFilters && (
+              <button className="exp-clear-filters" onClick={clearFilters}>
+                Clear filters
+              </button>
+            )}
+          </div>
+
+          {selectedIds.length > 0 && (
+            <div className="exp-bulkbar">
+              <span className="exp-bulkbar-count">
+                {selectedIds.length} selected
+              </span>
+              <div className="exp-bulkbar-actions">
+                <button className="exp-action-btn exp-action-btn--danger" onClick={handleBulkDelete}>
+                  Delete selected
+                </button>
               </div>
             </div>
+          )}
 
-            <label className="exp-label">Vendor</label>
-            <input
-              className="exp-input"
-              placeholder="e.g. Builders Warehouse"
-              value={form.vendor}
-              onChange={(e) => setForm({ ...form, vendor: e.target.value })}
-            />
+          {loading ? (
+            <div className="exp-skeleton">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <div className="exp-skeleton-row" key={i} style={{ animationDelay: `${i * 0.05}s` }} />
+              ))}
+            </div>
+          ) : visibleExpenses.length === 0 ? (
+            <div className="exp-empty">
+              <p>{expenses.length === 0 ? "No expenses logged yet." : "No expenses match your filters."}</p>
+              <p className="exp-empty-sub">
+                {expenses.length === 0
+                  ? "Add your first expense to start tracking what you spend."
+                  : "Try adjusting your search, category, or date range."}
+              </p>
+            </div>
+          ) : (
+            <div className="exp-table-wrap">
+              <table className="exp-table">
+                <thead>
+                  <tr>
+                    <th className="exp-th-check">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.length === visibleExpenses.length && visibleExpenses.length > 0}
+                        onChange={toggleSelectAll}
+                      />
+                    </th>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Vendor</th>
+                    <th>Description</th>
+                    <th>Amount</th>
+                    <th>Receipt</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleExpenses.map((e, i) => (
+                    <tr className="exp-row" key={e.id} style={{ animationDelay: `${Math.min(i, 8) * 0.03}s` }}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(e.id)}
+                          onChange={() => toggleSelect(e.id)}
+                        />
+                      </td>
+                      <td>{formatDate(e.expense_date)}</td>
+                      <td>
+                        <span className="exp-category-pill">
+                          {CATEGORY_LABELS[e.category] || e.category}
+                        </span>
+                        {e.is_recurring && (
+                          <span className="exp-recurring-pill" title={`Repeats ${e.recurring_frequency}`}>
+                            ↻ {e.recurring_frequency === "weekly" ? "Weekly" : "Monthly"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="exp-muted">{e.vendor || "—"}</td>
+                      <td className="exp-muted">{e.description || "—"}</td>
+                      <td className="exp-name-cell">{currency.format(e.amount)}</td>
+                      <td>
+                        {e.receipt_path ? (
+                          <button className="exp-link" onClick={() => viewReceipt(e)}>
+                            View
+                          </button>
+                        ) : (
+                          <span className="exp-muted">—</span>
+                        )}
+                      </td>
+                      <td className="exp-actions-cell">
+                        <button className="exp-action-btn" onClick={() => openDuplicateModal(e)}>
+                          Duplicate
+                        </button>
+                        <button className="exp-action-btn" onClick={() => openEditModal(e)}>
+                          Edit
+                        </button>
+                        <button className="exp-action-btn exp-action-btn--danger" onClick={() => handleDelete(e)}>
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
-            <label className="exp-label">Description</label>
-            <input
-              className="exp-input"
-              placeholder="What was this for?"
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-            />
+        {modalOpen && (
+          <div className="exp-modal-overlay" onClick={closeModal}>
+            <div className="exp-modal" onClick={(e) => e.stopPropagation()}>
+              <h2>{form.id ? "Edit expense" : "Add expense"}</h2>
 
-            <label className="exp-label">Date</label>
-            <input
-              className="exp-input"
-              type="date"
-              value={form.expense_date}
-              onChange={(e) => setForm({ ...form, expense_date: e.target.value })}
-            />
+              {error && <p className="exp-error">{error}</p>}
 
-            <label className="exp-label">Receipt (optional)</label>
-            <input
-              className="exp-input"
-              type="file"
-              accept="image/*,application/pdf"
-              onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-            />
-            {form.receipt_path && !receiptFile && (
-              <p className="exp-existing-receipt">A receipt is already attached. Choose a new file to replace it.</p>
-            )}
+              <label className="exp-label">Category</label>
+              <select
+                className="exp-input exp-input--select"
+                value={form.category}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
+              >
+                {CATEGORIES.map((c) => (
+                  <option key={c.key} value={c.key}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
 
-            <label className="exp-recurring-toggle">
+              {form.category === "other" && (
+                <>
+                  <label className="exp-label">Custom category</label>
+                  <input
+                    className="exp-input"
+                    placeholder="e.g. Software subscriptions"
+                    value={form.customCategory}
+                    onChange={(e) => setForm({ ...form, customCategory: e.target.value })}
+                  />
+                </>
+              )}
+
+              <div className="exp-input-row">
+                <div>
+                  <label className="exp-label">Amount (R)</label>
+                  <input
+                    className="exp-input"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={form.amount}
+                    onChange={(e) => setForm({ ...form, amount: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="exp-label">VAT (R, optional)</label>
+                  <input
+                    className="exp-input"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={form.vat_amount}
+                    onChange={(e) => setForm({ ...form, vat_amount: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <label className="exp-label">Vendor</label>
               <input
-                type="checkbox"
-                checked={form.is_recurring}
-                onChange={(e) => setForm({ ...form, is_recurring: e.target.checked })}
+                className="exp-input"
+                placeholder="e.g. Builders Warehouse"
+                value={form.vendor}
+                onChange={(e) => setForm({ ...form, vendor: e.target.value })}
               />
-              <span>This expense repeats</span>
-            </label>
 
-            {form.is_recurring && (
-              <>
-                <label className="exp-label">Repeats</label>
-                <select
-                  className="exp-input exp-input--select"
-                  value={form.recurring_frequency}
-                  onChange={(e) => setForm({ ...form, recurring_frequency: e.target.value })}
-                >
-                  <option value="monthly">Monthly</option>
-                  <option value="weekly">Weekly</option>
-                </select>
-              </>
-            )}
+              <label className="exp-label">Description</label>
+              <input
+                className="exp-input"
+                placeholder="What was this for?"
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+              />
 
-            <div className="exp-modal-actions">
-              <button className="exp-cancel-btn" onClick={closeModal} disabled={saving}>
-                Cancel
-              </button>
-              <button className="exp-add-btn" onClick={handleSave} disabled={saving}>
-                {saving ? "Saving..." : form.id ? "Save changes" : "Add expense"}
-              </button>
+              <label className="exp-label">Date</label>
+              <input
+                className="exp-input"
+                type="date"
+                value={form.expense_date}
+                onChange={(e) => setForm({ ...form, expense_date: e.target.value })}
+              />
+
+              <label className="exp-label">Receipt (optional)</label>
+              <input
+                className="exp-input"
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
+              />
+              {form.receipt_path && !receiptFile && (
+                <p className="exp-existing-receipt">A receipt is already attached. Choose a new file to replace it.</p>
+              )}
+
+              <label className="exp-recurring-toggle">
+                <input
+                  type="checkbox"
+                  checked={form.is_recurring}
+                  onChange={(e) => setForm({ ...form, is_recurring: e.target.checked })}
+                />
+                <span>This expense repeats</span>
+              </label>
+
+              {form.is_recurring && (
+                <>
+                  <label className="exp-label">Repeats</label>
+                  <select
+                    className="exp-input exp-input--select"
+                    value={form.recurring_frequency}
+                    onChange={(e) => setForm({ ...form, recurring_frequency: e.target.value })}
+                  >
+                    <option value="monthly">Monthly</option>
+                    <option value="weekly">Weekly</option>
+                  </select>
+                </>
+              )}
+
+              <div className="exp-modal-actions">
+                <button className="exp-cancel-btn" onClick={closeModal} disabled={saving}>
+                  Cancel
+                </button>
+                <button className="exp-add-btn" onClick={handleSave} disabled={saving}>
+                  {saving ? "Saving..." : form.id ? "Save changes" : "Add expense"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -11,10 +11,51 @@
 }
 
 .exp-page {
+  position: relative;
   min-height: 100vh;
   background: var(--navy);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
+  overflow-x: hidden;
+}
+
+/* ---------- Ambient background layer ---------- */
+/* Fixed behind everything. The distortion image sits underneath a navy/
+   purple/teal gradient wash so it reads as part of the existing theme
+   rather than a raw photo, and stays subtle enough for text on top. */
+.exp-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--navy);
+  pointer-events: none;
+}
+
+.exp-bg-distortion {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.4;
+  filter: saturate(0.7) brightness(0.75);
+  mix-blend-mode: luminosity;
+}
+
+.exp-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 15% 0%, rgba(124, 58, 237, 0.35), transparent 60%),
+    radial-gradient(ellipse 70% 60% at 100% 20%, rgba(59, 130, 246, 0.28), transparent 60%),
+    radial-gradient(ellipse 70% 70% at 50% 100%, rgba(20, 184, 166, 0.18), transparent 65%),
+    linear-gradient(180deg, rgba(11, 15, 26, 0.55) 0%, rgba(11, 15, 26, 0.85) 55%, var(--navy) 100%);
+}
+
+/* Everything else renders above the background layer */
+.exp-content {
+  position: relative;
+  z-index: 1;
 }
 
 .exp-body {
@@ -93,7 +134,7 @@
 
 /* Secondary button (e.g. Export) — outline variant sitting next to .exp-add-btn */
 .exp-secondary-btn {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   color: #e7e9ef;
   border-radius: 10px;
@@ -103,11 +144,13 @@
   font-size: 14px;
   cursor: pointer;
   white-space: nowrap;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 .exp-secondary-btn:hover:not(:disabled) {
   border-color: var(--blue);
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.1);
   transform: translateY(-1px);
 }
 .exp-secondary-btn:active:not(:disabled) {
@@ -131,10 +174,12 @@
 }
 
 .exp-stat-card {
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(17, 21, 39, 0.55);
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 16px 20px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   transition: border-color 0.2s ease, transform 0.2s ease;
   animation: exp-fade-up 0.35s ease both;
 }
@@ -147,11 +192,11 @@
 }
 .exp-stat-card--warn {
   border-color: rgba(248, 113, 113, 0.3);
-  background: rgba(248, 113, 113, 0.05);
+  background: rgba(248, 113, 113, 0.09);
 }
 .exp-stat-card--positive {
   border-color: rgba(20, 184, 166, 0.3);
-  background: rgba(20, 184, 166, 0.05);
+  background: rgba(20, 184, 166, 0.09);
 }
 
 .exp-stat-label {
@@ -199,24 +244,26 @@
 }
 .exp-search-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(17, 21, 39, 0.55);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px 10px 36px;
   font-family: "Inter", sans-serif;
   font-size: 14px;
   color: #e7e9ef;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .exp-search-input::placeholder { color: var(--slate); }
 .exp-search-input:focus {
   outline: none;
   border-color: var(--blue);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(17, 21, 39, 0.75);
 }
 
 .exp-select {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(17, 21, 39, 0.55);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 10px 14px;
@@ -224,6 +271,8 @@
   font-size: 14px;
   color: #e7e9ef;
   cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   transition: border-color 0.15s ease;
 }
 .exp-select:focus { outline: none; border-color: var(--blue); }
@@ -236,7 +285,7 @@
 .exp-date-input:focus {
   outline: none;
   border-color: var(--blue);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(17, 21, 39, 0.75);
 }
 
 .exp-range-sep {
@@ -265,11 +314,13 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  background: rgba(124, 58, 237, 0.08);
+  background: rgba(124, 58, 237, 0.14);
   border: 1px solid rgba(124, 58, 237, 0.3);
   border-radius: 10px;
   padding: 10px 16px;
   margin-bottom: 16px;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   animation: exp-slide-down 0.2s ease both;
 }
 @keyframes exp-slide-down {
@@ -295,6 +346,9 @@
   padding: 60px 20px;
   border: 1px dashed var(--border);
   border-radius: 12px;
+  background: rgba(17, 21, 39, 0.4);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   animation: exp-fade-up 0.3s ease both;
 }
 .exp-empty p { margin: 0 0 6px; }
@@ -311,9 +365,9 @@
   border-radius: 10px;
   background: linear-gradient(
     90deg,
-    rgba(255, 255, 255, 0.03) 25%,
-    rgba(255, 255, 255, 0.07) 37%,
-    rgba(255, 255, 255, 0.03) 63%
+    rgba(255, 255, 255, 0.04) 25%,
+    rgba(255, 255, 255, 0.09) 37%,
+    rgba(255, 255, 255, 0.04) 63%
   );
   background-size: 400% 100%;
   animation: exp-shimmer 1.4s ease infinite;
@@ -327,8 +381,10 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(17, 21, 39, 0.55);
   overflow-x: auto;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   animation: exp-fade-up 0.3s ease both;
 }
 .exp-table {
@@ -364,7 +420,7 @@
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.exp-row:hover td { background: rgba(255, 255, 255, 0.025); }
+.exp-row:hover td { background: rgba(255, 255, 255, 0.04); }
 
 .exp-name-cell { font-weight: 600; color: #fdfdfe; }
 .exp-muted { color: var(--slate); }
@@ -389,7 +445,7 @@
   padding: 3px 10px;
   white-space: nowrap;
   color: #b8c6e6;
-  background: rgba(59, 130, 246, 0.1);
+  background: rgba(59, 130, 246, 0.14);
   border: 1px solid rgba(59, 130, 246, 0.28);
 }
 
@@ -403,7 +459,7 @@
   margin-left: 6px;
   white-space: nowrap;
   color: #99efe2;
-  background: rgba(20, 184, 166, 0.1);
+  background: rgba(20, 184, 166, 0.14);
   border: 1px solid rgba(20, 184, 166, 0.3);
 }
 
@@ -427,20 +483,22 @@
 }
 .exp-action-btn:hover {
   border-color: var(--blue);
-  background: rgba(59, 130, 246, 0.06);
+  background: rgba(59, 130, 246, 0.08);
 }
 .exp-action-btn:active { transform: scale(0.97); }
 .exp-action-btn--danger:hover {
   border-color: #f87171;
   color: #f87171;
-  background: rgba(248, 113, 113, 0.06);
+  background: rgba(248, 113, 113, 0.08);
 }
 
 /* Modal */
 .exp-modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -453,13 +511,15 @@
 .exp-modal {
   width: 100%;
   max-width: 460px;
-  background: var(--navy-raised);
+  background: rgba(17, 21, 39, 0.92);
   border: 1px solid var(--border);
   border-radius: 16px;
   padding: 32px;
   box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
   max-height: 90vh;
   overflow-y: auto;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   animation: exp-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 @keyframes exp-modal-in {
@@ -489,7 +549,7 @@
 }
 .exp-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 12px 14px;
@@ -506,7 +566,7 @@
 .exp-input:focus {
   outline: none;
   border-color: var(--blue);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .exp-existing-receipt {
@@ -576,4 +636,19 @@
     display: none;
   }
   .exp-date-input { min-width: 0; flex: 1; }
+}
+
+/* Backdrop-filter isn't supported in all browsers (older Firefox/Safari) —
+   fall back to more opaque solid panels so contrast still holds. */
+@supports not (backdrop-filter: blur(1px)) {
+  .exp-stat-card,
+  .exp-search-input,
+  .exp-select,
+  .exp-table-wrap,
+  .exp-modal,
+  .exp-secondary-btn,
+  .exp-bulkbar,
+  .exp-empty {
+    background: rgba(17, 21, 39, 0.94);
+  }
 }
