@@ -6,7 +6,7 @@
 }
 
 /* ------------------------------------------------------------------ */
-/* Background shader layer (LightRays, inlined)                        */
+/* Background shader layer (Silk, inlined)                             */
 /* ------------------------------------------------------------------ */
 
 .team-bg-layer {
@@ -15,7 +15,7 @@
   z-index: 0;
   pointer-events: none;
   opacity: 0.35;
-  min-height: 500px; /* guarantees a non-zero canvas size even before content lays out */
+  min-height: 500px;
 }
 
 .team-lightrays-canvas {
