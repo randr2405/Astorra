@@ -98,7 +98,12 @@ function JoinTeam() {
     try {
       const { error } = await supabase.rpc("accept_staff_invite", { p_token: token });
       if (error) throw error;
-      navigate("/dashboard");
+      // Full reload (not React Router's navigate) so App.js remounts and
+      // re-fetches the user/business row from Supabase. Without this, App's
+      // in-memory `business` state is stale (it was fetched before
+      // accept_staff_invite linked this user), and the /dashboard route
+      // would incorrectly redirect to /onboarding.
+      window.location.href = "/dashboard";
     } catch (err) {
       setAcceptError(
         err.message?.includes("USER_ALREADY_EXISTS")
