@@ -16,9 +16,22 @@
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
   position: relative;
+  overflow: hidden;
+}
+
+/* Shader/canvas background — fixed behind everything */
+.job-bg-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 
 .job-body {
+  position: relative;
+  z-index: 1;
   max-width: 1120px;
   margin: 0 auto;
   padding: 48px 32px 80px;
@@ -93,6 +106,8 @@
   padding: 60px 20px;
   border: 1px dashed var(--border);
   border-radius: 12px;
+  background: rgba(11, 15, 26, 0.45);
+  backdrop-filter: blur(6px);
 }
 .job-inline-link {
   background: none;
@@ -126,7 +141,8 @@
   padding: 7px 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: transparent;
+  background: rgba(11, 15, 26, 0.5);
+  backdrop-filter: blur(6px);
   color: rgba(255, 255, 255, 0.7);
   font-family: "Inter", sans-serif;
   font-size: 13px;
@@ -140,7 +156,7 @@
 .job-filter-btn--active {
   border-color: var(--purple);
   color: #fdfdfe;
-  background: rgba(124, 58, 237, 0.12);
+  background: rgba(124, 58, 237, 0.16);
 }
 .job-filter-count {
   font-size: 11px;
@@ -177,7 +193,8 @@
   padding: 9px 30px 9px 34px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(11, 15, 26, 0.55);
+  backdrop-filter: blur(6px);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
   font-size: 13px;
@@ -187,7 +204,7 @@
 .job-search input::placeholder { color: var(--slate); }
 .job-search input:focus {
   border-color: var(--blue);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(11, 15, 26, 0.7);
 }
 .job-search-clear {
   position: absolute;
@@ -203,7 +220,8 @@
 .job-search-clear:hover { color: #fdfdfe; }
 
 .job-sort-select {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(11, 15, 26, 0.55);
+  backdrop-filter: blur(6px);
   border: 1px solid var(--border);
   color: #e7e9ef;
   border-radius: 8px;
@@ -224,7 +242,8 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(17, 21, 39, 0.6);
+  backdrop-filter: blur(10px);
 }
 .job-table { width: 100%; border-collapse: collapse; }
 .job-table th {
@@ -250,7 +269,7 @@
   animation: job-row-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   transition: background 0.15s ease;
 }
-.job-row:hover td { background: rgba(255, 255, 255, 0.025); }
+.job-row:hover td { background: rgba(255, 255, 255, 0.035); }
 
 @keyframes job-row-in {
   from { opacity: 0; transform: translateY(6px); }
@@ -576,6 +595,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .job-bg-canvas { display: none; }
   * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
