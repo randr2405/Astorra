@@ -13,27 +13,14 @@ const RUN_STATUS_LABEL = {
 // ----------------------------------------------------------------------
 // PAYE / UIF calculation — SIMPLIFIED APPROXIMATION.
 //
-// Based on SARS 2024/2025 individual tax brackets and the primary
-// rebate, and the standard UIF earnings ceiling. This does NOT account
-// for medical aid tax credits, retirement annuity deductions, secondary/
-// tertiary rebates (65+/75+), or any other adjustments to taxable
-// income. It's a reasonable estimate for a small business's own payroll,
-// not a substitute for a payroll professional or accountant — review
-// the bracket figures at the start of each tax year.
+// Tax brackets, the primary rebate, and the UIF ceiling are loaded from
+// the `tax_tables` table (most recent row with effective_from <= today),
+// rather than hardcoded here — see the tax_tables migration. This does
+// NOT account for medical aid tax credits, retirement annuity deductions,
+// secondary/tertiary rebates (65+/75+), or any other adjustments to
+// taxable income. It's a reasonable estimate for a small business's own
+// payroll, not a substitute for a payroll professional or accountant.
 // ----------------------------------------------------------------------
-
-const TAX_BRACKETS_2024_25 = [
-  { upTo: 237100, base: 0, rate: 0.18, above: 0 },
-  { upTo: 370500, base: 42678, rate: 0.26, above: 237100 },
-  { upTo: 512800, base: 77362, rate: 0.31, above: 370500 },
-  { upTo: 673000, base: 121475, rate: 0.36, above: 512800 },
-  { upTo: 857900, base: 179147, rate: 0.39, above: 673000 },
-  { upTo: 1817000, base: 251258, rate: 0.41, above: 857900 },
-  { upTo: Infinity, base: 644489, rate: 0.45, above: 1817000 },
-];
-const PRIMARY_REBATE_ANNUAL = 17235;
-const UIF_CEILING_MONTHLY = 17712;
-const UIF_RATE = 0.01;
 
 // Average working days used to derive a daily rate for unpaid-leave
 // deductions on salaried staff. 21.67 = 260 working days / 12 months.
@@ -44,19 +31,34 @@ function periodsPerYear(frequency) {
   return frequency === "weekly" ? 52 : 12;
 }
 
-function calculatePAYEForPeriod(grossForPeriod, frequency) {
+// taxTable.brackets stores the top bracket's upTo as null (JSON has no
+// Infinity) — normalise it back to Infinity here so bracket lookup works
+// the same way it always did.
+function normaliseBrackets(brackets) {
+  return brackets.map((b) => ({
+    ...b,
+    upTo: b.upTo === null || b.upTo === undefined ? Infinity : b.upTo,
+  }));
+}
+
+function calculatePAYEForPeriod(grossForPeriod, frequency, taxTable) {
   const periods = periodsPerYear(frequency);
   const annualGross = grossForPeriod * periods;
-  const bracket = TAX_BRACKETS_2024_25.find((b) => annualGross <= b.upTo);
-  const annualTax = Math.max(0, bracket.base + (annualGross - bracket.above) * bracket.rate - PRIMARY_REBATE_ANNUAL);
+  const brackets = normaliseBrackets(taxTable.brackets);
+  const bracket = brackets.find((b) => annualGross <= b.upTo);
+  const annualTax = Math.max(
+    0,
+    bracket.base + (annualGross - bracket.above) * bracket.rate - Number(taxTable.primary_rebate_annual)
+  );
   return annualTax / periods;
 }
 
-function calculateUIFForPeriod(grossForPeriod, frequency) {
+function calculateUIFForPeriod(grossForPeriod, frequency, taxTable) {
   const periods = periodsPerYear(frequency);
-  const ceilingForPeriod = (UIF_CEILING_MONTHLY * 12) / periods;
+  const uifRate = Number(taxTable.uif_rate);
+  const ceilingForPeriod = (Number(taxTable.uif_ceiling_monthly) * 12) / periods;
   const base = Math.min(grossForPeriod, ceilingForPeriod);
-  return { employee: base * UIF_RATE, employer: base * UIF_RATE };
+  return { employee: base * uifRate, employer: base * uifRate };
 }
 
 // Computes a full payslip preview for one staff member.
@@ -65,7 +67,7 @@ function calculateUIFForPeriod(grossForPeriod, frequency) {
 //     proportionally reduces base pay before tax
 //   - bonusTotal: sum of one-off additions (bonus/commission/overtime),
 //     added to gross AFTER the absence deduction, and is taxable
-function computePayslip(staffMember, hoursWorked, daysAbsent, bonusTotal) {
+function computePayslip(staffMember, hoursWorked, daysAbsent, bonusTotal, taxTable) {
   const frequency = staffMember.pay_frequency || "monthly";
   const rate = Number(staffMember.pay_rate) || 0;
 
@@ -84,8 +86,8 @@ function computePayslip(staffMember, hoursWorked, daysAbsent, bonusTotal) {
   const bonus = Number(bonusTotal) || 0;
   const taxableGross = basePay + bonus;
 
-  const paye = calculatePAYEForPeriod(taxableGross, frequency);
-  const uif = calculateUIFForPeriod(taxableGross, frequency);
+  const paye = calculatePAYEForPeriod(taxableGross, frequency, taxTable);
+  const uif = calculateUIFForPeriod(taxableGross, frequency, taxTable);
   const netPay = taxableGross - paye - uif.employee;
 
   return {
@@ -122,6 +124,13 @@ export default function Payroll({ business }) {
   const [search, setSearch] = useState("");
 
   const [staff, setStaff] = useState([]);
+
+  // Current statutory tax table (brackets, rebate, UIF ceiling), loaded
+  // from tax_tables. Pay-run creation/editing is disabled until this is
+  // loaded, and an error banner shows if no row could be found at all.
+  const [taxTable, setTaxTable] = useState(null);
+  const [taxTableLoading, setTaxTableLoading] = useState(true);
+  const [taxTableError, setTaxTableError] = useState("");
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -173,10 +182,38 @@ export default function Payroll({ business }) {
     if (!error) setStaff(data || []);
   }, [business.id]);
 
+  // Most recent tax table whose effective_from is on or before today. If
+  // effective_to is set and in the past, it's excluded too, so a stale
+  // superseded row can never be picked up even if ordering ever changes.
+  const loadTaxTable = useCallback(async () => {
+    setTaxTableLoading(true);
+    setTaxTableError("");
+    const today = new Date().toISOString().slice(0, 10);
+
+    const { data, error } = await supabase
+      .from("tax_tables")
+      .select("*")
+      .lte("effective_from", today)
+      .or(`effective_to.is.null,effective_to.gte.${today}`)
+      .order("effective_from", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      setTaxTableError("Couldn't load the current tax table. Please try again.");
+    } else if (!data) {
+      setTaxTableError("No tax table found for the current date. Payroll calculations are unavailable until one is added.");
+    } else {
+      setTaxTable(data);
+    }
+    setTaxTableLoading(false);
+  }, []);
+
   useEffect(() => {
     loadPayRuns();
     loadStaff();
-  }, [loadPayRuns, loadStaff]);
+    loadTaxTable();
+  }, [loadPayRuns, loadStaff, loadTaxTable]);
 
   useEffect(() => {
     setMounted(true);
@@ -229,6 +266,8 @@ export default function Payroll({ business }) {
   }
 
   function openCreateRun() {
+    if (!taxTable) return;
+
     const today = new Date();
     const periodStart = new Date(today.getFullYear(), today.getMonth(), 1);
     const periodEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
@@ -248,7 +287,7 @@ export default function Payroll({ business }) {
   }
 
   async function openEditRun(run) {
-    if (run.status !== "draft") return;
+    if (run.status !== "draft" || !taxTable) return;
 
     setIsEditMode(true);
     setEditingRunId(run.id);
@@ -339,6 +378,7 @@ export default function Payroll({ business }) {
   }
 
   const previewPayslips = useMemo(() => {
+    if (!taxTable) return [];
     return payableStaff
       .filter((s) => includedStaffIds.includes(s.id))
       .map((s) => {
@@ -347,10 +387,10 @@ export default function Payroll({ business }) {
         return {
           staff: s,
           bonusItems,
-          ...computePayslip(s, hoursByStaffId[s.id], daysAbsentByStaffId[s.id], bonusTotal),
+          ...computePayslip(s, hoursByStaffId[s.id], daysAbsentByStaffId[s.id], bonusTotal, taxTable),
         };
       });
-  }, [payableStaff, includedStaffIds, hoursByStaffId, daysAbsentByStaffId, bonusItemsByStaffId]);
+  }, [payableStaff, includedStaffIds, hoursByStaffId, daysAbsentByStaffId, bonusItemsByStaffId, taxTable]);
 
   const previewTotals = useMemo(() => {
     return previewPayslips.reduce(
@@ -404,6 +444,10 @@ export default function Payroll({ business }) {
   async function handleSaveRun(e) {
     e.preventDefault();
 
+    if (!taxTable) {
+      setCreateFormError("Tax table not loaded yet — please wait a moment and try again.");
+      return;
+    }
     if (!createForm.period_start || !createForm.period_end || !createForm.pay_date) {
       setCreateFormError("Period start, period end, and pay date are all required.");
       return;
@@ -738,11 +782,28 @@ export default function Payroll({ business }) {
             <h1 className="pay-heading">Payroll</h1>
           </div>
           <div className="pay-header-actions">
-            <button className="pay-add-btn" onClick={openCreateRun} disabled={payableStaff.length === 0}>
+            <button
+              className="pay-add-btn"
+              onClick={openCreateRun}
+              disabled={payableStaff.length === 0 || !taxTable}
+              title={!taxTable ? "Waiting for tax table to load..." : ""}
+            >
               + New pay run
             </button>
           </div>
         </div>
+
+        {taxTableError && (
+          <div className="pay-empty" style={{ marginBottom: 24 }}>
+            {taxTableError}
+          </div>
+        )}
+
+        {taxTable && (
+          <p className="pay-muted" style={{ marginBottom: 16 }}>
+            Using tax year {taxTable.tax_year} brackets.
+          </p>
+        )}
 
         <div className={`pay-stats ${mounted ? "pay-in" : ""}`}>
           <div className="pay-stat-card">
@@ -767,7 +828,7 @@ export default function Payroll({ business }) {
         ) : !runsLoading && payRuns.length === 0 ? (
           <div className="pay-empty">
             No pay runs yet.{" "}
-            <button className="pay-inline-link" onClick={openCreateRun}>
+            <button className="pay-inline-link" onClick={openCreateRun} disabled={!taxTable}>
               Create your first one
             </button>
           </div>
@@ -868,7 +929,11 @@ export default function Payroll({ business }) {
                           ) : (
                             <>
                               {run.status === "draft" && (
-                                <button className="pay-action-btn" onClick={() => openEditRun(run)}>
+                                <button
+                                  className="pay-action-btn"
+                                  onClick={() => openEditRun(run)}
+                                  disabled={!taxTable}
+                                >
                                   Edit
                                 </button>
                               )}
@@ -1040,7 +1105,7 @@ export default function Payroll({ business }) {
                 <button type="button" className="pay-cancel-btn" onClick={closeCreateModal}>
                   Cancel
                 </button>
-                <button type="submit" className="pay-add-btn" disabled={savingRun}>
+                <button type="submit" className="pay-add-btn" disabled={savingRun || !taxTable}>
                   {savingRun ? (
                     <span className="pay-spinner" />
                   ) : isEditMode ? (
@@ -1086,6 +1151,7 @@ export default function Payroll({ business }) {
               <button
                 className="pay-action-btn pay-edit-run-btn"
                 onClick={() => openEditRun(selectedRun)}
+                disabled={!taxTable}
               >
                 Edit this pay run
               </button>
