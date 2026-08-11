@@ -11,10 +11,41 @@
 }
 
 .cust-page {
+  position: relative;
   min-height: 100vh;
   background: var(--navy);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
+  overflow: hidden;
+}
+
+/* Shader background layer */
+.cust-bg-container {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.cust-bg-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  opacity: 0.55;
+}
+
+/* Darkening/readability overlay so content stays legible over the shader */
+.cust-page-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  background: radial-gradient(120% 90% at 50% 0%, rgba(11, 15, 26, 0.35) 0%, rgba(11, 15, 26, 0.78) 55%, rgba(11, 15, 26, 0.94) 100%);
+  pointer-events: none;
+}
+
+.cust-page-content {
+  position: relative;
+  z-index: 2;
 }
 
 .cust-body {
@@ -121,7 +152,8 @@
   padding: 10px 32px 10px 34px;
   border-radius: 10px;
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(6px);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
   font-size: 13.5px;
@@ -133,7 +165,7 @@
 }
 .cust-search input:focus {
   border-color: var(--blue);
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.07);
 }
 .cust-search-clear {
   position: absolute;
@@ -161,7 +193,8 @@
   font-weight: 500;
 }
 .cust-sort select {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(6px);
   border: 1px solid var(--border);
   color: #e7e9ef;
   border-radius: 8px;
@@ -195,6 +228,8 @@
   padding: 64px 20px;
   border: 1px dashed var(--border);
   border-radius: 14px;
+  background: rgba(11, 15, 26, 0.45);
+  backdrop-filter: blur(8px);
 }
 .cust-empty-icon {
   width: 42px;
@@ -226,7 +261,8 @@
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
+  background: rgba(17, 21, 39, 0.55);
+  backdrop-filter: blur(10px);
 }
 .cust-table {
   width: 100%;
@@ -259,7 +295,7 @@
   transition: background 0.15s ease;
 }
 .cust-row:hover td {
-  background: rgba(255, 255, 255, 0.035);
+  background: rgba(255, 255, 255, 0.045);
 }
 
 @keyframes cust-row-in {
@@ -725,9 +761,15 @@
   .cust-drawer {
     max-width: 100%;
   }
+  .cust-bg-canvas {
+    opacity: 0.4;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .cust-bg-container {
+    display: none;
+  }
   * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
