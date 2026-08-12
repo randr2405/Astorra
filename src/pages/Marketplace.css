@@ -35,6 +35,7 @@
   max-width: 1120px;
   margin: 0 auto;
   padding: 48px 32px 80px;
+  box-sizing: border-box;
 }
 
 /* Generic reveal-on-load utility */
@@ -67,6 +68,7 @@
   align-items: flex-start;
   gap: 24px;
   margin-bottom: 28px;
+  flex-wrap: wrap;
 }
 
 .mkt-eyebrow {
@@ -94,6 +96,7 @@
 
 .mkt-progress-track {
   width: 220px;
+  max-width: 100%;
   height: 6px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
@@ -123,6 +126,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+  white-space: nowrap;
 }
 
 .mkt-upgrade-btn:hover {
@@ -159,6 +163,7 @@
   color: #f87171;
   font-size: 13.5px;
   margin-bottom: 16px;
+  word-break: break-word;
 }
 
 .mkt-toolbar {
@@ -188,6 +193,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  white-space: nowrap;
 }
 
 .mkt-filter-btn:hover {
@@ -223,9 +229,10 @@
   background: rgba(255, 255, 255, 0.03);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
-  font-size: 13px;
+  font-size: 16px;
   outline: none;
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 
 .mkt-search input::placeholder {
@@ -268,6 +275,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-sizing: border-box;
   transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease,
     opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), translate 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -330,6 +338,7 @@
   color: #fff;
   background: linear-gradient(135deg, #7c3aed, #3b82f6 55%, #14b8a6);
   transition: transform 0.2s ease;
+  flex-shrink: 0;
 }
 
 .mkt-card:hover .mkt-icon {
@@ -344,6 +353,7 @@
   background: rgba(255, 255, 255, 0.05);
   padding: 4px 10px;
   border-radius: 999px;
+  white-space: nowrap;
 }
 
 .mkt-card h3 {
@@ -366,6 +376,7 @@
   display: flex;
   gap: 8px;
   min-height: 36px;
+  flex-wrap: wrap;
 }
 
 .mkt-install-btn,
@@ -447,6 +458,7 @@
   color: rgba(255, 255, 255, 0.75);
   width: 100%;
   animation: mkt-fade-in 0.15s ease;
+  flex-wrap: wrap;
 }
 
 @keyframes mkt-fade-in {
@@ -551,6 +563,10 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   animation: mkt-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 50;
+  max-width: calc(100vw - 32px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mkt-toast--success {
@@ -599,13 +615,21 @@
   }
 }
 
+/* ------------------------- Responsive ------------------------- */
+
 @media (max-width: 900px) {
   .mkt-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  .mkt-body { padding: 40px 24px 70px; }
   .mkt-search {
     width: 100%;
   }
+}
+
+@media (max-width: 700px) {
+  .mkt-toolbar { flex-direction: column; align-items: stretch; }
+  .mkt-filters { gap: 6px; }
 }
 
 @media (max-width: 560px) {
@@ -613,12 +637,40 @@
     grid-template-columns: 1fr;
   }
   .mkt-body {
-    padding-left: 20px;
-    padding-right: 20px;
+    padding: 28px 16px 56px;
   }
   .mkt-header {
     flex-direction: column;
+    align-items: stretch;
+    gap: 14px;
   }
+  .mkt-heading { font-size: 22px; }
+  .mkt-eyebrow { font-size: 10.5px; }
+  .mkt-progress-track { width: 100%; }
+  .mkt-upgrade-btn { width: 100%; }
+
+  .mkt-cap-banner { padding: 12px 14px; }
+
+  .mkt-card { padding: 20px; }
+  .mkt-card-actions { flex-direction: column; }
+  .mkt-uninstall-btn { width: 100%; }
+
+  .mkt-footnote { padding: 16px 18px; margin-top: 28px; }
+
+  .mkt-toast {
+    left: 16px;
+    right: 16px;
+    transform: none;
+    max-width: none;
+    white-space: normal;
+    text-align: center;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  .mkt-body { padding: 24px 12px 48px; }
+  .mkt-heading { font-size: 20px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

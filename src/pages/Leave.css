@@ -47,6 +47,7 @@
   max-width: 1120px;
   margin: 0 auto;
   padding: 48px 32px 80px;
+  box-sizing: border-box;
 }
 
 /* Reveal-on-load utility */
@@ -78,6 +79,7 @@
   justify-content: space-between;
   margin-bottom: 24px;
   gap: 20px;
+  flex-wrap: wrap;
 }
 .lv-eyebrow {
   text-transform: uppercase;
@@ -136,6 +138,7 @@
   padding: 18px 20px;
   background: rgba(17, 21, 39, 0.55);
   backdrop-filter: blur(6px);
+  box-sizing: border-box;
 }
 .lv-stat-label {
   font-size: 12px;
@@ -159,6 +162,8 @@
   margin-bottom: 22px;
   border-bottom: 1px solid var(--border);
   transition-delay: 0.05s;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .lv-tab-btn {
   background: transparent;
@@ -172,6 +177,7 @@
   border-bottom: 2px solid transparent;
   transform: translateY(1px);
   transition: color 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
 }
 .lv-tab-btn:hover { color: #d7dae2; }
 .lv-tab-btn--active {
@@ -227,6 +233,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  white-space: nowrap;
 }
 .lv-filter-btn:hover { color: #fdfdfe; }
 .lv-filter-btn--active {
@@ -272,9 +279,10 @@
   background: rgba(255, 255, 255, 0.03);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
-  font-size: 13px;
+  font-size: 16px;
   outline: none;
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 .lv-search input::placeholder { color: var(--slate); }
 .lv-search input:focus {
@@ -289,6 +297,8 @@
   overflow: hidden;
   background: rgba(17, 21, 39, 0.55);
   backdrop-filter: blur(6px);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .lv-table { width: 100%; border-collapse: collapse; }
 .lv-table th {
@@ -300,12 +310,14 @@
   font-weight: 600;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 .lv-table td {
   padding: 15px 20px;
   font-size: 14px;
   color: #d7dae2;
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 .lv-table tr:last-child td { border-bottom: none; }
 
@@ -369,6 +381,7 @@
   font-size: 12.5px;
   color: rgba(255, 255, 255, 0.75);
   animation: lv-fade-in 0.15s ease;
+  flex-wrap: wrap;
 }
 @keyframes lv-fade-in {
   from { opacity: 0; }
@@ -442,6 +455,7 @@
   padding: 32px;
   box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
   animation: lv-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
 }
 @keyframes lv-modal-in {
   from { opacity: 0; transform: translateY(12px) scale(0.98); }
@@ -471,9 +485,10 @@
   padding: 12px 14px;
   margin-bottom: 16px;
   font-family: "Inter", sans-serif;
-  font-size: 14.5px;
+  font-size: 16px;
   color: #e7e9ef;
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 .lv-textarea { resize: vertical; min-height: 64px; }
 .lv-select { appearance: none; cursor: pointer; }
@@ -518,6 +533,7 @@
   color: #f87171;
   font-size: 13.5px;
   margin: -8px 0 14px;
+  word-break: break-word;
 }
 
 /* Detail / review drawer */
@@ -539,6 +555,7 @@
   border-left: 1px solid var(--border);
   padding: 32px;
   animation: lv-drawer-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
 }
 @keyframes lv-drawer-in {
   from { opacity: 0; transform: translateX(24px); }
@@ -635,6 +652,10 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   animation: lv-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 60;
+  max-width: calc(100vw - 32px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .lv-toast--success { border-color: rgba(20, 184, 166, 0.35); }
 @keyframes lv-toast-in {
@@ -651,12 +672,15 @@
   backdrop-filter: blur(6px);
   padding: 20px;
   transition-delay: 0.06s;
+  box-sizing: border-box;
 }
 .lv-calendar-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 18px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .lv-calendar-nav {
   display: flex;
@@ -674,6 +698,7 @@
   line-height: 1;
   cursor: pointer;
   transition: border-color 0.15s ease;
+  flex-shrink: 0;
 }
 .lv-cal-nav-btn:hover { border-color: var(--blue); }
 .lv-calendar-title {
@@ -758,6 +783,12 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 900px) {
+  .lv-body { padding: 40px 24px 70px; }
+}
+
 @media (max-width: 700px) {
   .lv-stats { grid-template-columns: 1fr; }
   .lv-table th:nth-child(2),
@@ -770,6 +801,98 @@
   .lv-drawer { max-width: 100%; }
   .lv-calendar-cell { min-height: 60px; }
   .lv-calendar-chip { font-size: 9.5px; }
+}
+
+@media (max-width: 560px) {
+  .lv-body { padding: 28px 16px 56px; }
+
+  .lv-header { flex-direction: column; align-items: stretch; gap: 12px; }
+  .lv-heading { font-size: 22px; }
+  .lv-eyebrow { font-size: 10.5px; }
+  .lv-add-btn { width: 100%; padding: 13px 20px; }
+
+  .lv-stat-card { padding: 14px 16px; }
+  .lv-stat-value { font-size: 19px; }
+
+  /* Collapse table into stacked cards */
+  .lv-table thead { display: none; }
+  .lv-table, .lv-table tbody, .lv-table tr, .lv-table td {
+    display: block;
+    width: 100%;
+  }
+  .lv-table-wrap { overflow-x: visible; }
+  .lv-table tr {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+  .lv-table tr:last-child { border-bottom: none; }
+  .lv-table td {
+    border-bottom: none;
+    padding: 4px 0;
+    font-size: 13.5px;
+    white-space: normal;
+  }
+  .lv-table td:empty { display: none; }
+  .lv-table td[data-label]::before {
+    content: attr(data-label);
+    display: inline-block;
+    min-width: 90px;
+    color: var(--slate);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 8px;
+  }
+  .lv-actions-cell { justify-content: flex-start; margin-top: 8px; }
+  .lv-confirm-row { justify-content: flex-start; }
+
+  .lv-modal { padding: 20px; border-radius: 14px; }
+  .lv-modal h2 { font-size: 18px; margin-bottom: 18px; }
+  .lv-modal-actions { flex-direction: column; }
+
+  .lv-drawer { padding: 20px; }
+  .lv-drawer-actions { flex-direction: column; }
+
+  /* Calendar: drop to a 1-col agenda list instead of a cramped 7-col grid */
+  .lv-calendar-wrap { padding: 14px; }
+  .lv-calendar-title { min-width: 0; font-size: 14.5px; }
+  .lv-calendar-grid--labels { display: none; }
+  .lv-calendar-grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .lv-calendar-cell {
+    min-height: 0;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .lv-calendar-cell--out { display: none; }
+  .lv-calendar-date {
+    flex-shrink: 0;
+    min-width: 70px;
+  }
+  .lv-calendar-entries { flex: 1; }
+  .lv-calendar-chip {
+    white-space: normal;
+    font-size: 11px;
+  }
+
+  .lv-toast {
+    left: 16px;
+    right: 16px;
+    transform: none;
+    max-width: none;
+    white-space: normal;
+    text-align: center;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  .lv-body { padding: 24px 12px 48px; }
+  .lv-heading { font-size: 20px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
