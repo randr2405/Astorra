@@ -210,11 +210,43 @@
   }
 }
 
+@media (max-width: 900px) {
+  .privacy-body {
+    padding: 52px 24px 84px;
+  }
+}
+
 @media (max-width: 560px) {
   .privacy-body {
     padding: 44px 20px 72px;
   }
   .privacy-heading {
     font-size: 26px;
+  }
+  .privacy-eyebrow {
+    font-size: 10.5px;
+  }
+  .privacy-intro {
+    font-size: 14.5px;
+    margin-bottom: 36px;
+    padding-bottom: 28px;
+  }
+  .privacy-section {
+    margin-bottom: 28px;
+  }
+  .privacy-section h2 {
+    font-size: 16px;
+  }
+  .privacy-contact {
+    padding: 16px 18px;
+  }
+}
+
+@media (max-width: 360px) {
+  .privacy-body {
+    padding: 36px 16px 60px;
+  }
+  .privacy-heading {
+    font-size: 22px;
   }
 }

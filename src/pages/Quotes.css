@@ -40,6 +40,7 @@
   max-width: 1120px;
   margin: 0 auto;
   padding: 48px 32px 80px;
+  box-sizing: border-box;
 }
 
 /* The centered "block" — content sits on this raised card so the
@@ -52,6 +53,7 @@
   padding: 36px 36px 44px;
   backdrop-filter: blur(14px);
   box-shadow: 0 30px 80px -30px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.02);
+  box-sizing: border-box;
 }
 
 /* Reveal-on-load utility */
@@ -77,6 +79,7 @@
   justify-content: space-between;
   margin-bottom: 24px;
   gap: 20px;
+  flex-wrap: wrap;
 }
 .quo-eyebrow {
   text-transform: uppercase;
@@ -213,6 +216,7 @@
   font-size: 13px;
   outline: none;
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 .quo-search input::placeholder { color: var(--slate); }
 .quo-search input:focus {
@@ -255,6 +259,8 @@
   border-radius: 14px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.02);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .quo-table { width: 100%; border-collapse: collapse; }
 .quo-table th {
@@ -266,12 +272,14 @@
   font-weight: 600;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 .quo-table td {
   padding: 15px 20px;
   font-size: 14px;
   color: #d7dae2;
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 .quo-table tr:last-child td { border-bottom: none; }
 
@@ -334,6 +342,7 @@
   font-size: 12.5px;
   color: rgba(255, 255, 255, 0.75);
   animation: quo-fade-in 0.15s ease;
+  flex-wrap: wrap;
 }
 @keyframes quo-fade-in {
   from { opacity: 0; }
@@ -407,6 +416,7 @@
   padding: 32px;
   box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
   animation: quo-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
 }
 @keyframes quo-modal-in {
   from { opacity: 0; transform: translateY(12px) scale(0.98); }
@@ -438,6 +448,7 @@
   font-size: 14.5px;
   color: #e7e9ef;
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 .quo-select { appearance: none; cursor: pointer; }
 .quo-input::placeholder { color: var(--slate); }
@@ -560,11 +571,20 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   animation: quo-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 60;
+  max-width: calc(100vw - 32px);
 }
 .quo-toast--success { border-color: rgba(20, 184, 166, 0.35); }
 @keyframes quo-toast-in {
   from { opacity: 0; transform: translate(-50%, 12px); }
   to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 900px) {
+  .quo-body {
+    padding: 40px 24px 70px;
+  }
 }
 
 @media (max-width: 700px) {
@@ -580,10 +600,85 @@
   .quo-bg-canvas { opacity: 0.55; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .quo-bg-container { display: none; }
-  * {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+@media (max-width: 560px) {
+  .quo-body { padding: 28px 16px 56px; }
+  .quo-block { padding: 20px 16px 26px; border-radius: 14px; }
+
+  .quo-header { flex-direction: column; align-items: stretch; gap: 12px; }
+  .quo-heading { font-size: 22px; }
+  .quo-eyebrow { font-size: 10.5px; }
+  .quo-add-btn { width: 100%; padding: 13px 20px; }
+
+  /* Collapse table into stacked cards */
+  .quo-table thead { display: none; }
+  .quo-table, .quo-table tbody, .quo-table tr, .quo-table td {
+    display: block;
+    width: 100%;
   }
+  .quo-table-wrap { overflow-x: visible; }
+  .quo-table tr {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+  .quo-table tr:last-child { border-bottom: none; }
+  .quo-table td {
+    border-bottom: none;
+    padding: 4px 0;
+    font-size: 13.5px;
+    white-space: normal;
+  }
+  .quo-table td:empty { display: none; }
+  .quo-table td[data-label]::before {
+    content: attr(data-label);
+    display: inline-block;
+    min-width: 90px;
+    color: var(--slate);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 8px;
+  }
+  .quo-actions-cell { justify-content: flex-start; margin-top: 8px; }
+  .quo-confirm-row { justify-content: flex-start; }
+
+  .quo-modal { padding: 20px; border-radius: 14px; }
+  .quo-modal h2 { font-size: 18px; margin-bottom: 18px; }
+  .quo-modal-actions { flex-direction: column; }
+
+  .quo-line-item {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px;
+  }
+  .quo-line-item .quo-input { margin-bottom: 0; }
+  .quo-line-total {
+    display: block;
+    text-align: left;
+  }
+  .quo-remove-row-btn {
+    width: 100%;
+    height: 36px;
+  }
+
+  .quo-total-row {
+    justify-content: space-between;
+  }
+
+  .quo-toast {
+    left: 16px;
+    right: 16px;
+    transform: none;
+    max-width: none;
+    white-space: normal;
+    text-align: center;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  .quo-body { padding: 24px 12px 48px; }
+  .quo-block { padding: 16px 12px 22px; }
+  .quo-heading { font-size: 20px; }
 }
