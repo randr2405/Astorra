@@ -27,11 +27,6 @@
   overflow-x: hidden;
 }
 
-/* ---------------------------------------------------------------------
-   Faulty-terminal shader background. Sits fixed behind everything, tinted
-   purple->blue to match the page palette, faded out toward the bottom edge
-   so it never fights with the table for attention.
-   --------------------------------------------------------------------- */
 .inven-faulty-terminal-bg {
   position: fixed;
   inset: 0;
@@ -76,6 +71,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  box-sizing: border-box;
 }
 .inven-back {
   background: transparent;
@@ -89,6 +86,7 @@
   align-items: center;
   gap: 6px;
   transition: color 0.15s ease;
+  white-space: nowrap;
 }
 .inven-back:hover {
   color: #e7e9ef;
@@ -99,6 +97,7 @@
   letter-spacing: 0.14em;
   font-size: 17px;
   color: #fdfdfe;
+  white-space: nowrap;
 }
 
 .inven-body {
@@ -106,6 +105,7 @@
   margin: 0 auto;
   padding: 48px 32px 80px;
   animation: inven-page-in 0.4s ease both;
+  box-sizing: border-box;
 }
 
 @keyframes inven-page-in {
@@ -261,6 +261,9 @@
   gap: 14px;
   margin-bottom: 24px;
 }
+@media (max-width: 900px) {
+  .inven-stats { grid-template-columns: repeat(2, 1fr); }
+}
 .inven-stat-card {
   background: rgba(17, 21, 39, 0.45);
   backdrop-filter: blur(4px);
@@ -269,6 +272,7 @@
   padding: 16px 20px;
   transition: border-color 0.2s ease, transform 0.2s ease;
   animation: inven-fade-up 0.35s ease both;
+  box-sizing: border-box;
 }
 .inven-stat-card:nth-child(2) {
   animation-delay: 0.05s;
@@ -343,9 +347,10 @@
   border-radius: 10px;
   padding: 10px 14px 10px 36px;
   font-family: "Inter", sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   color: #e7e9ef;
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 .inven-search-input::placeholder {
   color: var(--slate);
@@ -435,6 +440,8 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
   background: rgba(124, 58, 237, 0.12);
   backdrop-filter: blur(6px);
   border: 1px solid rgba(124, 58, 237, 0.3);
@@ -447,10 +454,12 @@
   font-size: 13.5px;
   font-weight: 600;
   color: #d7c6fb;
+  white-space: nowrap;
 }
 .inven-bulkbar-actions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .inven-empty {
@@ -506,6 +515,8 @@
   background: rgba(17, 21, 39, 0.55);
   backdrop-filter: blur(5px);
   animation: inven-fade-up 0.3s ease both;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .inven-table {
   width: 100%;
@@ -550,6 +561,7 @@
   color: #d7dae2;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
+  white-space: nowrap;
 }
 .inven-table tr:last-child td {
   border-bottom: none;
@@ -614,6 +626,7 @@
   align-items: center;
   justify-content: center;
   transition: border-color 0.15s ease, transform 0.1s ease, background 0.15s ease;
+  flex-shrink: 0;
 }
 .inven-stepper-btn:hover:not(:disabled) {
   border-color: var(--blue);
@@ -706,7 +719,10 @@
   border-radius: 16px;
   padding: 32px;
   box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
+  max-height: 90vh;
+  overflow-y: auto;
   animation: inven-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  box-sizing: border-box;
 }
 @keyframes inven-modal-in {
   from {
@@ -745,10 +761,11 @@
   padding: 12px 14px;
   margin-bottom: 16px;
   font-family: "Inter", sans-serif;
-  font-size: 14.5px;
+  font-size: 16px;
   color: #e7e9ef;
   transition: border-color 0.15s ease, background 0.15s ease;
   resize: vertical;
+  box-sizing: border-box;
 }
 .inven-input::placeholder {
   color: var(--slate);
@@ -787,6 +804,7 @@
   font-size: 13.5px;
   margin: -8px 0 14px;
   animation: inven-shake 0.3s ease;
+  word-break: break-word;
 }
 @keyframes inven-shake {
   0%,
@@ -799,6 +817,13 @@
   75% {
     transform: translateX(4px);
   }
+}
+
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 900px) {
+  .inven-nav-inner { padding: 16px 24px; }
+  .inven-body { padding: 40px 24px 70px; }
 }
 
 @media (max-width: 700px) {
@@ -814,4 +839,76 @@
   .inven-table td:nth-child(4) {
     display: none;
   }
+  .inven-toolbar { flex-direction: column; align-items: stretch; }
+  .inven-search-wrap { min-width: 0; }
+  .inven-select { width: 100%; }
+  .inven-header-actions { width: 100%; }
+  .inven-header-actions button { flex: 1; }
+}
+
+@media (max-width: 560px) {
+  .inven-nav-inner { padding: 14px 16px; }
+  .inven-wordmark { font-size: 15px; }
+  .inven-back span { display: none; }
+
+  .inven-body { padding: 28px 16px 56px; }
+
+  .inven-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .inven-heading { font-size: 22px; }
+  .inven-eyebrow { font-size: 10.5px; }
+  .inven-header-actions { flex-direction: column; }
+  .inven-add-btn,
+  .inven-secondary-btn { width: 100%; padding: 13px 20px; }
+
+  .inven-stat-card { padding: 14px 16px; }
+  .inven-stat-value { font-size: 19px; }
+
+  .inven-bulkbar { flex-direction: column; align-items: stretch; }
+  .inven-bulkbar-actions .inven-action-btn { flex: 1; }
+
+  /* Collapse table into stacked cards */
+  .inven-table thead { display: none; }
+  .inven-table, .inven-table tbody, .inven-table tr, .inven-table td {
+    display: block;
+    width: 100%;
+  }
+  .inven-table-wrap { overflow-x: visible; }
+  .inven-table tr {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+  .inven-table tr:last-child { border-bottom: none; }
+  .inven-table td {
+    border-bottom: none;
+    padding: 4px 0;
+    font-size: 13.5px;
+    white-space: normal;
+  }
+  .inven-table td:empty { display: none; }
+  .inven-table td[data-label]::before {
+    content: attr(data-label);
+    display: inline-block;
+    min-width: 90px;
+    color: var(--slate);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 8px;
+  }
+  .inven-th-check { display: none; }
+  .inven-actions-cell { justify-content: flex-start; margin-top: 8px; }
+  .inven-qty-cell { justify-content: flex-start; }
+
+  .inven-modal { padding: 20px; border-radius: 14px; }
+  .inven-modal h2 { font-size: 18px; margin-bottom: 18px; }
+  .inven-modal-actions { flex-direction: column; }
+}
+
+@media (max-width: 360px) {
+  .inven-body { padding: 24px 12px 48px; }
+  .inven-heading { font-size: 20px; }
 }
