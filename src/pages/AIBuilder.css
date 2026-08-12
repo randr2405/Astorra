@@ -16,7 +16,7 @@
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .aib-bg {
@@ -53,9 +53,9 @@
   margin: 0 auto;
   padding: 48px 32px 80px;
   position: relative;
+  box-sizing: border-box;
 }
 
-/* Reveal-on-load */
 .aib-hero,
 .aib-form-wrap,
 .aib-result,
@@ -74,7 +74,6 @@
   transition-delay: 0.08s;
 }
 
-/* Icon badge above heading */
 .aib-badge {
   width: 46px;
   height: 46px;
@@ -145,9 +144,9 @@
   color: var(--slate);
   line-height: 1.6;
   margin: 0 0 8px;
+  word-break: break-word;
 }
 
-/* Credits bar */
 .aib-credits-wrap {
   margin: 12px 0 28px;
 }
@@ -187,7 +186,6 @@
   }
 }
 
-/* Form */
 .aib-form {
   margin-bottom: 8px;
 }
@@ -213,11 +211,12 @@
   border-radius: 13px;
   padding: 16px;
   font-family: "Inter", sans-serif;
-  font-size: 14.5px;
+  font-size: 16px;
   line-height: 1.6;
   color: #e7e9ef;
   resize: vertical;
   outline: none;
+  box-sizing: border-box;
 }
 .aib-textarea::placeholder {
   color: var(--slate);
@@ -251,7 +250,9 @@
   box-shadow: 0 8px 24px -8px rgba(124, 58, 237, 0.5);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 9px;
+  white-space: nowrap;
 }
 .aib-submit:hover:not(:disabled) {
   transform: translateY(-1px);
@@ -281,7 +282,6 @@
   }
 }
 
-/* Thinking indicator under the form while waiting */
 .aib-thinking {
   display: flex;
   align-items: center;
@@ -299,6 +299,7 @@
 .aib-thinking-dots {
   display: flex;
   gap: 4px;
+  flex-shrink: 0;
 }
 .aib-thinking-dots span {
   width: 5px;
@@ -357,7 +358,6 @@
   }
 }
 
-/* Result */
 .aib-result {
   background: rgba(17, 21, 39, 0.55);
   backdrop-filter: blur(10px);
@@ -365,6 +365,7 @@
   border-radius: 16px;
   padding: 28px;
   margin-top: 24px;
+  box-sizing: border-box;
 }
 .aib-result.aib-in {
   opacity: 1;
@@ -385,6 +386,7 @@
 .aib-result-kicker svg {
   width: 14px;
   height: 14px;
+  flex-shrink: 0;
 }
 
 .aib-reasoning {
@@ -393,6 +395,7 @@
   color: #d7dae2;
   margin: 0 0 22px;
   animation: aib-fade-in 0.4s ease 0.05s both;
+  word-break: break-word;
 }
 
 .aib-module-list {
@@ -456,6 +459,7 @@
   font-weight: 600;
   color: #fdfdfe;
   margin: 0 0 4px;
+  word-break: break-word;
 }
 
 .aib-module-card p {
@@ -463,6 +467,7 @@
   color: var(--slate);
   line-height: 1.5;
   margin: 0;
+  word-break: break-word;
 }
 
 .aib-install-btn {
@@ -479,7 +484,9 @@
   box-shadow: 0 8px 24px -8px rgba(124, 58, 237, 0.5);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 9px;
+  width: auto;
 }
 .aib-install-btn:hover:not(:disabled) {
   transform: translateY(-1px);
@@ -532,17 +539,147 @@
   }
 }
 
+@media (max-width: 900px) {
+  .aib-body {
+    max-width: 100%;
+    padding: 40px 28px 70px;
+  }
+}
+
 @media (max-width: 560px) {
   .aib-body {
-    padding: 36px 20px 60px;
+    padding: 28px 16px 56px;
+  }
+
+  .aib-badge {
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    margin-bottom: 14px;
+  }
+  .aib-badge svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .aib-eyebrow {
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+  }
+
+  .aib-heading {
+    font-size: 22px;
+    line-height: 1.3;
+  }
+
+  .aib-sub {
+    font-size: 14px;
+  }
+
+  .aib-meta {
+    font-size: 12px;
+  }
+
+  .aib-credits-wrap {
+    margin: 10px 0 22px;
+  }
+
+  .aib-textarea {
+    padding: 14px;
+    font-size: 16px;
+  }
+
+  .aib-form-footer {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .aib-char-count {
+    text-align: center;
+    order: 2;
+  }
+
+  .aib-submit {
+    order: 1;
+    width: 100%;
+    padding: 14px 20px;
+    justify-content: center;
+  }
+
+  .aib-thinking {
+    padding: 14px 16px;
+    font-size: 13px;
+    margin-top: 16px;
+  }
+
+  .aib-error {
+    padding: 11px 14px;
+    font-size: 13px;
+  }
+
+  .aib-result {
+    padding: 20px 16px;
+    margin-top: 20px;
+    border-radius: 14px;
+  }
+
+  .aib-result-kicker {
+    font-size: 11px;
+    margin-bottom: 12px;
+  }
+
+  .aib-reasoning {
+    font-size: 14px;
+    margin-bottom: 18px;
+  }
+
+  .aib-module-list {
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+
+  .aib-module-card {
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .aib-module-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 12.5px;
+  }
+
+  .aib-module-card h3 {
+    font-size: 14.5px;
+  }
+
+  .aib-module-card p {
+    font-size: 13px;
+  }
+
+  .aib-install-btn {
+    width: 100%;
+    padding: 14px 20px;
+  }
+
+  .aib-cap-notice {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 360px) {
+  .aib-body {
+    padding: 24px 14px 48px;
   }
   .aib-heading {
-    font-size: 24px;
+    font-size: 20px;
   }
-  .aib-form-footer {
-    align-items: stretch;
+  .aib-module-card {
+    flex-direction: column;
   }
-  .aib-submit {
-    justify-content: center;
+  .aib-module-icon {
+    width: 32px;
+    height: 32px;
   }
 }

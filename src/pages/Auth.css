@@ -6,8 +6,10 @@
   align-items: center;
   justify-content: center;
   background: radial-gradient(circle at 20% 20%, #101a2e 0%, #060a14 55%, #04070d 100%);
-  overflow: hidden;
+  overflow-x: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 20px;
+  box-sizing: border-box;
 }
 
 .auth-bg {
@@ -96,6 +98,7 @@
   border: 1px solid rgba(120, 180, 255, 0.12);
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.02) inset;
   animation: cardIn 0.5s ease-out;
+  box-sizing: border-box;
 }
 
 @keyframes cardIn {
@@ -151,7 +154,7 @@
   border: 1px solid rgba(120, 180, 255, 0.15);
   background: rgba(255, 255, 255, 0.03);
   color: #ffffff;
-  font-size: 14px;
+  font-size: 16px;
   outline: none;
   box-sizing: border-box;
   transition: border-color 0.2s ease, background 0.2s ease;
@@ -170,6 +173,7 @@
   color: #f87171;
   font-size: 13px;
   margin: 4px 0 12px;
+  word-break: break-word;
 }
 
 .auth-submit {
@@ -266,5 +270,72 @@
   .auth-particle,
   .auth-card {
     animation: none !important;
+  }
+}
+
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 480px) {
+  .auth-page {
+    padding: 16px;
+    align-items: flex-start;
+    padding-top: 60px;
+  }
+
+  .auth-card {
+    padding: 32px 22px;
+    border-radius: 16px;
+    max-width: 100%;
+  }
+
+  .auth-wordmark {
+    font-size: 19px;
+    letter-spacing: 2px;
+  }
+
+  .auth-slogan {
+    font-size: 12px;
+    margin: 4px 0 24px;
+  }
+
+  .auth-heading {
+    font-size: 18px;
+    margin-bottom: 16px;
+  }
+
+  .auth-reset-hint {
+    font-size: 12.5px;
+  }
+
+  .auth-input {
+    padding: 12px 13px;
+  }
+
+  .auth-submit,
+  .auth-google {
+    padding: 13px;
+  }
+
+  .auth-switch {
+    font-size: 12.5px;
+    margin-top: 18px;
+  }
+}
+
+@media (max-height: 700px) and (max-width: 480px) {
+  .auth-page {
+    align-items: flex-start;
+    padding-top: 32px;
+    padding-bottom: 32px;
+  }
+}
+
+@media (max-width: 360px) {
+  .auth-card {
+    padding: 26px 18px;
+  }
+  .auth-wordmark {
+    font-size: 17px;
+    letter-spacing: 1.5px;
   }
 }
