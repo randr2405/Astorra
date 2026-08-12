@@ -20,9 +20,6 @@
 }
 
 /* ---------- Ambient background layer ---------- */
-/* Fixed behind everything. The distortion image sits underneath a navy/
-   blue/purple gradient wash so it reads as part of the existing theme
-   rather than a raw shader, and stays subtle enough for text on top. */
 .exp-bg {
   position: fixed;
   inset: 0;
@@ -50,7 +47,6 @@
     linear-gradient(180deg, rgba(11, 15, 26, 0.35) 0%, rgba(11, 15, 26, 0.6) 55%, rgba(11, 15, 26, 0.85) 100%);
 }
 
-/* Everything else renders above the background layer */
 .exp-content {
   position: relative;
   z-index: 1;
@@ -61,6 +57,7 @@
   margin: 0 auto;
   padding: 48px 32px 80px;
   animation: exp-page-in 0.4s ease both;
+  box-sizing: border-box;
 }
 
 @keyframes exp-page-in {
@@ -130,7 +127,6 @@
   box-shadow: none;
 }
 
-/* Secondary button (e.g. Export) — outline variant sitting next to .exp-add-btn */
 .exp-secondary-btn {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid var(--border);
@@ -180,6 +176,7 @@
   -webkit-backdrop-filter: blur(10px);
   transition: border-color 0.2s ease, transform 0.2s ease;
   animation: exp-fade-up 0.35s ease both;
+  box-sizing: border-box;
 }
 .exp-stat-card:nth-child(2) { animation-delay: 0.05s; }
 .exp-stat-card:nth-child(3) { animation-delay: 0.1s; }
@@ -247,11 +244,12 @@
   border-radius: 10px;
   padding: 10px 14px 10px 36px;
   font-family: "Inter", sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   color: #e7e9ef;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 .exp-search-input::placeholder { color: var(--slate); }
 .exp-search-input:focus {
@@ -279,7 +277,9 @@
 .exp-date-input {
   cursor: text;
   min-width: 148px;
+  font-size: 16px;
 }
+
 .exp-date-input:focus {
   outline: none;
   border-color: var(--blue);
@@ -381,6 +381,7 @@
   overflow: hidden;
   background: rgba(11, 15, 26, 0.68);
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   animation: exp-fade-up 0.3s ease both;
@@ -519,6 +520,7 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   animation: exp-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+  box-sizing: border-box;
 }
 @keyframes exp-modal-in {
   from { opacity: 0; transform: translateY(10px) scale(0.98); }
@@ -553,11 +555,12 @@
   padding: 12px 14px;
   margin-bottom: 16px;
   font-family: "Inter", sans-serif;
-  font-size: 14.5px;
+  font-size: 16px;
   color: #e7e9ef;
   transition: border-color 0.15s ease, background 0.15s ease;
   resize: vertical;
   color-scheme: dark;
+  box-sizing: border-box;
 }
 .exp-input--select { cursor: pointer; }
 .exp-input::placeholder { color: var(--slate); }
@@ -571,6 +574,7 @@
   font-size: 12.5px;
   color: var(--slate);
   margin: -10px 0 16px;
+  word-break: break-word;
 }
 
 /* "This expense repeats" checkbox row in the modal */
@@ -590,6 +594,7 @@
   height: 16px;
   accent-color: var(--purple);
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .exp-modal-actions {
@@ -619,21 +624,12 @@
   font-size: 13.5px;
   margin: -8px 0 14px;
   animation: exp-shake 0.3s ease;
+  word-break: break-word;
 }
 @keyframes exp-shake {
   0%, 100% { transform: translateX(0); }
   25% { transform: translateX(-4px); }
   75% { transform: translateX(4px); }
-}
-
-@media (max-width: 700px) {
-  .exp-stats { grid-template-columns: 1fr; }
-  .exp-input-row { grid-template-columns: 1fr; }
-  .exp-table th:nth-child(5),
-  .exp-table td:nth-child(5) {
-    display: none;
-  }
-  .exp-date-input { min-width: 0; flex: 1; }
 }
 
 /* Backdrop-filter isn't supported in all browsers (older Firefox/Safari) —
@@ -649,4 +645,87 @@
   .exp-empty {
     background: rgba(17, 21, 39, 0.94);
   }
+}
+
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 900px) {
+  .exp-body { padding: 40px 24px 70px; }
+}
+
+@media (max-width: 700px) {
+  .exp-stats { grid-template-columns: 1fr; }
+  .exp-input-row { grid-template-columns: 1fr; }
+  .exp-table th:nth-child(5),
+  .exp-table td:nth-child(5) {
+    display: none;
+  }
+  .exp-date-input { min-width: 0; flex: 1; }
+  .exp-toolbar { flex-direction: column; align-items: stretch; }
+  .exp-search-wrap { min-width: 0; }
+  .exp-select { width: 100%; }
+  .exp-header-actions { width: 100%; }
+  .exp-header-actions button { flex: 1; }
+}
+
+@media (max-width: 560px) {
+  .exp-body { padding: 28px 16px 56px; }
+
+  .exp-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .exp-heading { font-size: 22px; }
+  .exp-eyebrow { font-size: 10.5px; }
+  .exp-header-actions { flex-direction: column; }
+  .exp-add-btn,
+  .exp-secondary-btn { width: 100%; padding: 13px 20px; }
+
+  .exp-stat-card { padding: 14px 16px; }
+  .exp-stat-value { font-size: 19px; }
+
+  .exp-bulkbar { flex-direction: column; align-items: stretch; }
+  .exp-bulkbar-actions .exp-action-btn { flex: 1; }
+
+  /* Collapse table into stacked cards */
+  .exp-table thead { display: none; }
+  .exp-table, .exp-table tbody, .exp-table tr, .exp-table td {
+    display: block;
+    width: 100%;
+  }
+  .exp-table-wrap { overflow-x: visible; }
+  .exp-table tr {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+  .exp-table tr:last-child { border-bottom: none; }
+  .exp-table td {
+    border-bottom: none;
+    padding: 4px 0;
+    font-size: 13.5px;
+    white-space: normal;
+  }
+  .exp-table td:empty { display: none; }
+  .exp-table td[data-label]::before {
+    content: attr(data-label);
+    display: inline-block;
+    min-width: 90px;
+    color: var(--slate);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 8px;
+  }
+  .exp-th-check { display: none; }
+  .exp-actions-cell { justify-content: flex-start; margin-top: 8px; }
+
+  .exp-modal { padding: 20px; border-radius: 14px; }
+  .exp-modal h2 { font-size: 18px; margin-bottom: 18px; }
+  .exp-modal-actions { flex-direction: column; }
+}
+
+@media (max-width: 360px) {
+  .exp-body { padding: 24px 12px 48px; }
+  .exp-heading { font-size: 20px; }
 }
