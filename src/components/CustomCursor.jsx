@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import "./CustomCursor.css";
 
 function CustomCursor() {
+  const [enabled, setEnabled] = useState(false);
   const dotRef = useRef(null);
   const ringRef = useRef(null);
   const posRef = useRef({ x: 0, y: 0 });
@@ -10,6 +11,12 @@ function CustomCursor() {
   useEffect(() => {
     const isCoarse = window.matchMedia("(pointer: coarse)").matches;
     if (isCoarse) return;
+
+    setEnabled(true);
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) return;
 
     document.body.classList.add("custom-cursor-active");
 
@@ -80,7 +87,9 @@ function CustomCursor() {
       document.removeEventListener("mouseleave", handleLeaveWindow);
       document.removeEventListener("mouseenter", handleEnterWindow);
     };
-  }, []);
+  }, [enabled]);
+
+  if (!enabled) return null;
 
   return (
     <>
