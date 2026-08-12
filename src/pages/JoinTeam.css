@@ -19,6 +19,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
+  box-sizing: border-box;
 }
 
 .jt-card {
@@ -31,6 +32,7 @@
   box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
 }
 
 .jt-card--center {
@@ -59,6 +61,7 @@
   font-size: 18px;
   color: #fff;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .jt-icon--error {
   background: linear-gradient(135deg, #f87171, #ef4444);
@@ -157,9 +160,10 @@
   padding: 11px 14px;
   margin-bottom: 16px;
   font-family: "Inter", sans-serif;
-  font-size: 14px;
+  font-size: 16px;
   color: #e7e9ef;
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 .jt-input:hover {
   border-color: rgba(255, 255, 255, 0.18);
@@ -174,6 +178,7 @@
   color: #f87171;
   font-size: 13px;
   margin: -6px 0 14px;
+  word-break: break-word;
 }
 
 .jt-btn {
@@ -190,6 +195,7 @@
   gap: 8px;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   border: none;
+  box-sizing: border-box;
 }
 .jt-btn--primary {
   color: #fff;
@@ -247,6 +253,7 @@
   border: 2px solid rgba(255, 255, 255, 0.35);
   border-top-color: #fff;
   animation: jt-spin 0.7s linear infinite;
+  flex-shrink: 0;
 }
 .jt-spinner--lg {
   width: 28px;
@@ -260,6 +267,23 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 560px) {
+  .jt-page { padding: 16px; }
+  .jt-card { padding: 28px 22px; border-radius: 16px; }
+  .jt-wordmark { font-size: 15px; margin-bottom: 22px; }
+  .jt-invite-summary h1 { font-size: 19px; }
+  .jt-card--center h2 { font-size: 17px; }
+  .jt-tab { padding: 8px 6px; font-size: 12.5px; }
+}
+
+@media (max-width: 360px) {
+  .jt-page { padding: 12px; }
+  .jt-card { padding: 22px 16px; }
+  .jt-invite-summary h1 { font-size: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

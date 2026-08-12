@@ -35,6 +35,7 @@
   max-width: 1120px;
   margin: 0 auto;
   padding: 48px 32px 80px;
+  box-sizing: border-box;
 }
 
 /* Reveal-on-load utility */
@@ -60,6 +61,7 @@
   justify-content: space-between;
   margin-bottom: 24px;
   gap: 20px;
+  flex-wrap: wrap;
 }
 .job-eyebrow {
   text-transform: uppercase;
@@ -149,6 +151,7 @@
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  white-space: nowrap;
 }
 .job-filter-btn:hover {
   color: #fdfdfe;
@@ -197,9 +200,10 @@
   backdrop-filter: blur(6px);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
-  font-size: 13px;
+  font-size: 16px;
   outline: none;
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 .job-search input::placeholder { color: var(--slate); }
 .job-search input:focus {
@@ -244,6 +248,8 @@
   overflow: hidden;
   background: rgba(17, 21, 39, 0.6);
   backdrop-filter: blur(10px);
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .job-table { width: 100%; border-collapse: collapse; }
 .job-table th {
@@ -255,12 +261,14 @@
   font-weight: 600;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 .job-table td {
   padding: 15px 20px;
   font-size: 14px;
   color: #d7dae2;
   border-bottom: 1px solid var(--border);
+  white-space: nowrap;
 }
 .job-table tr:last-child td { border-bottom: none; }
 
@@ -328,6 +336,7 @@
   font-size: 12.5px;
   color: rgba(255, 255, 255, 0.75);
   animation: job-fade-in 0.15s ease;
+  flex-wrap: wrap;
 }
 @keyframes job-fade-in {
   from { opacity: 0; }
@@ -401,6 +410,7 @@
   padding: 32px;
   box-shadow: 0 24px 60px -20px rgba(0, 0, 0, 0.7);
   animation: job-modal-in 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
 }
 @keyframes job-modal-in {
   from { opacity: 0; transform: translateY(12px) scale(0.98); }
@@ -430,9 +440,10 @@
   padding: 12px 14px;
   margin-bottom: 16px;
   font-family: "Inter", sans-serif;
-  font-size: 14.5px;
+  font-size: 16px;
   color: #e7e9ef;
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 .job-textarea { resize: vertical; min-height: 70px; }
 .job-select { appearance: none; cursor: pointer; }
@@ -547,6 +558,7 @@
   color: #f87171;
   font-size: 13.5px;
   margin: -8px 0 14px;
+  word-break: break-word;
 }
 
 .job-spinner {
@@ -577,11 +589,21 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   animation: job-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 60;
+  max-width: calc(100vw - 32px);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .job-toast--success { border-color: rgba(20, 184, 166, 0.35); }
 @keyframes job-toast-in {
   from { opacity: 0; transform: translate(-50%, 12px); }
   to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 900px) {
+  .job-body { padding: 40px 24px 70px; }
 }
 
 @media (max-width: 700px) {
@@ -592,6 +614,84 @@
   .job-toolbar { flex-direction: column; align-items: stretch; }
   .job-toolbar-right { flex-direction: column; align-items: stretch; }
   .job-search { min-width: 0; }
+}
+
+@media (max-width: 560px) {
+  .job-body { padding: 28px 16px 56px; }
+
+  .job-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .job-heading { font-size: 22px; }
+  .job-eyebrow { font-size: 10.5px; }
+  .job-add-btn { width: 100%; padding: 13px 20px; }
+
+  .job-filters { gap: 6px; }
+  .job-filter-btn { padding: 6px 12px; font-size: 12.5px; }
+
+  /* Collapse table into stacked cards */
+  .job-table thead { display: none; }
+  .job-table, .job-table tbody, .job-table tr, .job-table td {
+    display: block;
+    width: 100%;
+  }
+  .job-table-wrap { overflow-x: visible; }
+  .job-table tr {
+    border-bottom: 1px solid var(--border);
+    padding: 14px 16px;
+  }
+  .job-table tr:last-child { border-bottom: none; }
+  .job-table td {
+    border-bottom: none;
+    padding: 4px 0;
+    font-size: 13.5px;
+    white-space: normal;
+  }
+  .job-table td:empty { display: none; }
+  .job-table td[data-label]::before {
+    content: attr(data-label);
+    display: inline-block;
+    min-width: 90px;
+    color: var(--slate);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 8px;
+  }
+  .job-actions-cell { justify-content: flex-start; margin-top: 8px; }
+  .job-confirm-row { justify-content: flex-start; }
+
+  .job-modal { padding: 20px; border-radius: 14px; }
+  .job-modal h2 { font-size: 18px; margin-bottom: 18px; }
+  .job-modal-actions { flex-direction: column; }
+
+  .job-task-row {
+    grid-template-columns: auto auto 1fr;
+    grid-template-areas:
+      "drag check input"
+      ".    .    remove";
+  }
+  .job-task-drag-handle { grid-area: drag; }
+  .job-task-checkbox { grid-area: check; }
+  .job-task-row .job-input { grid-area: input; }
+  .job-remove-row-btn { grid-area: remove; justify-self: end; width: 100%; max-width: 80px; }
+
+  .job-toast {
+    left: 16px;
+    right: 16px;
+    transform: none;
+    max-width: none;
+    white-space: normal;
+    text-align: center;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  .job-body { padding: 24px 12px 48px; }
+  .job-heading { font-size: 20px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
