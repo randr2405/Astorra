@@ -34,4 +34,32 @@
   max-width: 860px;
   margin: 0 auto;
   padding: 40px 24px 80px;
+  box-sizing: border-box;
+}
+
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 900px) {
+  .team-page-content {
+    padding: 36px 24px 70px;
+  }
+}
+
+@media (max-width: 560px) {
+  .team-page-content {
+    padding: 28px 16px 56px;
+  }
+}
+
+@media (max-width: 360px) {
+  .team-page-content {
+    padding: 24px 12px 48px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

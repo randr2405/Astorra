@@ -21,6 +21,7 @@
     var(--navy);
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
+  overflow-x: hidden;
 }
 
 .terms-body {
@@ -214,11 +215,45 @@
   }
 }
 
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 900px) {
+  .terms-body {
+    padding: 52px 28px 84px;
+  }
+}
+
 @media (max-width: 560px) {
   .terms-body {
     padding: 44px 20px 72px;
   }
   .terms-heading {
     font-size: 26px;
+  }
+  .terms-eyebrow {
+    font-size: 10.5px;
+  }
+  .terms-intro {
+    font-size: 14.5px;
+    margin-bottom: 36px;
+    padding-bottom: 28px;
+  }
+  .terms-section {
+    margin-bottom: 28px;
+  }
+  .terms-section h2 {
+    font-size: 16px;
+  }
+  .terms-contact {
+    padding: 16px 18px;
+  }
+}
+
+@media (max-width: 360px) {
+  .terms-body {
+    padding: 36px 16px 60px;
+  }
+  .terms-heading {
+    font-size: 22px;
   }
 }
