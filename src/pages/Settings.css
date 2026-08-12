@@ -35,6 +35,7 @@
   max-width: 640px;
   margin: 0 auto;
   padding: 48px 32px 80px;
+  box-sizing: border-box;
 }
 
 /* Generic reveal-on-load utility */
@@ -92,6 +93,7 @@ p.set-in,
   flex-direction: column;
   gap: 18px;
   margin-bottom: 20px;
+  box-sizing: border-box;
   transition: border-color 0.2s ease, opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -173,6 +175,7 @@ p.set-in,
   font-weight: 500;
   cursor: pointer;
   transition: border-color 0.15s ease, background 0.15s ease;
+  white-space: nowrap;
 }
 
 .set-secondary-btn:hover {
@@ -220,6 +223,7 @@ p.set-in,
   font-size: 13.5px;
   outline: none;
   transition: border-color 0.15s ease, background 0.15s ease;
+  box-sizing: border-box;
 }
 
 .set-field input:hover,
@@ -245,6 +249,7 @@ p.set-in,
   margin-top: 4px;
   padding-top: 14px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+  flex-wrap: wrap;
 }
 
 .set-unsaved {
@@ -323,6 +328,7 @@ p.set-in,
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
   animation: set-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   z-index: 50;
+  max-width: calc(100vw - 32px);
 }
 
 @keyframes set-toast-in {
@@ -336,17 +342,83 @@ p.set-in,
   }
 }
 
-@media (max-width: 560px) {
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 900px) {
   .set-body {
-    padding-left: 20px;
-    padding-right: 20px;
+    padding: 40px 24px 70px;
   }
+}
+
+@media (max-width: 700px) {
   .set-row {
     grid-template-columns: 1fr;
   }
+  .set-card {
+    padding: 22px;
+  }
+}
+
+@media (max-width: 560px) {
+  .set-body {
+    padding: 28px 16px 56px;
+  }
+  .set-heading {
+    font-size: 22px;
+  }
+  .set-eyebrow {
+    font-size: 10.5px;
+  }
+  .set-sub {
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+
+  .set-row {
+    grid-template-columns: 1fr;
+  }
+  .set-card {
+    padding: 18px;
+    border-radius: 14px;
+  }
+  .set-card-heading {
+    font-size: 15px;
+  }
+  .set-card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
   .set-logo-row {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .set-card-footer {
+    justify-content: stretch;
+  }
+  .set-card-footer .set-btn {
+    flex: 1;
+  }
+
+  .set-toast {
+    left: 16px;
+    right: 16px;
+    transform: none;
+    max-width: none;
+    white-space: normal;
+    text-align: center;
+    border-radius: 14px;
+  }
+}
+
+@media (max-width: 360px) {
+  .set-body {
+    padding: 24px 12px 48px;
+  }
+  .set-heading {
+    font-size: 20px;
   }
 }
 
