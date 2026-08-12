@@ -7,6 +7,12 @@
   --slate: #6b7280;
   color: #e7e9ef;
   font-family: "Inter", sans-serif;
+  box-sizing: border-box;
+}
+.ts-section *,
+.ts-section *::before,
+.ts-section *::after {
+  box-sizing: border-box;
 }
 
 .ts-header {
@@ -15,6 +21,7 @@
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
+  flex-wrap: wrap;
 }
 
 .ts-title {
@@ -64,6 +71,7 @@
 
 .ts-form-field {
   flex: 1;
+  min-width: 0;
 }
 
 .ts-form-field--narrow {
@@ -116,6 +124,7 @@ select.ts-input {
   gap: 8px;
   border: none;
   transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  white-space: nowrap;
 }
 .ts-btn--primary {
   color: #fff;
@@ -170,12 +179,14 @@ select.ts-input {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 12px 16px;
+  gap: 12px;
 }
 
 .ts-row-main {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
 }
 
 .ts-row-name {
@@ -185,6 +196,8 @@ select.ts-input {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+  word-break: break-word;
 }
 
 .ts-row-sub {
@@ -200,6 +213,7 @@ select.ts-input {
   border-radius: 100px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
+  white-space: nowrap;
 }
 .ts-badge--you {
   background: rgba(20, 184, 166, 0.15);
@@ -228,3 +242,48 @@ select.ts-input {
   }
 }
 
+/* ------------------------- Responsive ------------------------- */
+
+@media (max-width: 700px) {
+  .ts-form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+  .ts-form-field--narrow {
+    flex: 1;
+  }
+}
+
+@media (max-width: 560px) {
+  .ts-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .ts-header .ts-btn {
+    align-self: flex-start;
+  }
+
+  .ts-title {
+    font-size: 18px;
+  }
+
+  .ts-invite-form {
+    padding: 16px;
+  }
+
+  .ts-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .ts-row .ts-btn {
+    align-self: flex-end;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ts-section * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
