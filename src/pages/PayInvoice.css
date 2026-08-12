@@ -20,6 +20,7 @@
   font-size: 13.5px;
   padding: 7px 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  gap: 12px;
 }
 
 .pay-bank-row:last-of-type {
@@ -40,4 +41,31 @@
   background: rgba(255, 255, 255, 0.03);
   border-radius: 8px;
   padding: 10px 12px;
+}
+
+@media (max-width: 560px) {
+  .pay-bank-details {
+    margin-top: 20px;
+    padding-top: 16px;
+  }
+  .pay-bank-details-heading {
+    font-size: 12.5px;
+    margin-bottom: 10px;
+  }
+  .pay-bank-row {
+    flex-wrap: wrap;
+    font-size: 13px;
+    padding: 8px 0;
+  }
+  .pay-bank-row > span:first-child {
+    color: rgba(255, 255, 255, 0.6);
+    flex-basis: 100%;
+  }
+  .pay-bank-row > span:last-child {
+    text-align: left;
+  }
+  .pay-bank-reference {
+    font-size: 12px;
+    padding: 9px 11px;
+  }
 }
