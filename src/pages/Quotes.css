@@ -481,6 +481,31 @@
 }
 .quo-add-row-btn:hover { border-color: var(--teal); }
 
+/* Column headers above the line item rows. Grid matches .quo-line-item
+   exactly (including the trailing remove-button column, left blank)
+   so labels line up with their inputs. */
+.quo-line-item-headers {
+  display: grid;
+  grid-template-columns: 1fr 70px 100px 74px auto;
+  gap: 8px;
+  padding: 0 2px;
+  margin-bottom: 6px;
+}
+.quo-line-item-headers span {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--slate);
+}
+.quo-line-item-headers span:nth-child(2),
+.quo-line-item-headers span:nth-child(3) {
+  text-align: left;
+}
+.quo-line-item-headers span:last-child {
+  width: 40px;
+}
+
 .quo-line-item {
   display: grid;
   grid-template-columns: 1fr 70px 100px 74px auto;
@@ -592,7 +617,9 @@
   .quo-table td:nth-child(2) { display: none; }
   .quo-row-2 { grid-template-columns: 1fr; }
   .quo-line-item { grid-template-columns: 1fr 60px 80px auto; }
+  .quo-line-item-headers { grid-template-columns: 1fr 60px 80px auto; }
   .quo-line-total { display: none; }
+  .quo-line-item-headers span:nth-child(4) { display: none; }
   .quo-toolbar { flex-direction: column; align-items: stretch; }
   .quo-toolbar-right { flex-direction: column; align-items: stretch; }
   .quo-search { min-width: 0; }
@@ -644,6 +671,11 @@
   .quo-modal { padding: 20px; border-radius: 14px; }
   .quo-modal h2 { font-size: 18px; margin-bottom: 18px; }
   .quo-modal-actions { flex-direction: column; }
+
+  /* Line items become stacked cards on mobile — the header row above
+     no longer lines up with anything, so hide it and rely on each
+     input's placeholder text instead. */
+  .quo-line-item-headers { display: none; }
 
   .quo-line-item {
     grid-template-columns: 1fr;

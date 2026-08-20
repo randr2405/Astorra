@@ -737,14 +737,14 @@ function Quotes({ business, appUser }) {
                       className="quo-row"
                       style={{ animationDelay: loaded ? `${Math.min(i, 12) * 35}ms` : "0ms" }}
                     >
-                      <td className="quo-name-cell">{q.quote_number}</td>
-                      <td className={q.customers?.name ? "" : "quo-muted"}>
+                      <td className="quo-name-cell" data-label="Quote #">{q.quote_number}</td>
+                      <td className={q.customers?.name ? "" : "quo-muted"} data-label="Customer">
                         {q.customers?.name || "—"}
                       </td>
-                      <td>
+                      <td data-label="Status">
                         <span className={`quo-status quo-status--${q.status}`}>{q.status}</span>
                       </td>
-                      <td className="quo-total-cell">R{Number(q.total).toFixed(2)}</td>
+                      <td className="quo-total-cell" data-label="Total">R{Number(q.total).toFixed(2)}</td>
                       <td>
                         {pendingDeleteId === q.id ? (
                           <div className="quo-confirm-row">
@@ -850,6 +850,17 @@ function Quotes({ business, appUser }) {
                 <button type="button" className="quo-add-row-btn" onClick={addLineItem}>
                   + Add row
                 </button>
+              </div>
+
+              {/* Column headers for the line item grid — hidden on narrow
+                  screens where the grid collapses to a stacked card layout,
+                  since placeholders inside each input take over that job. */}
+              <div className="quo-line-item-headers" aria-hidden="true">
+                <span>Description</span>
+                <span>Qty</span>
+                <span>Unit price</span>
+                <span>Total</span>
+                <span></span>
               </div>
 
               {lineItems.map((item, index) => {
