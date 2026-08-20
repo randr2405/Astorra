@@ -8,6 +8,10 @@ const MUTED = [130, 132, 138];     // secondary text
 const HAIRLINE = [225, 226, 230];  // thin rules and dividers
 const ACCENT = [24, 60, 92];       // deep, muted navy — used sparingly
 
+const PAGE_WIDTH = 210;
+const MARGIN_X = 24;
+const CONTENT_WIDTH = PAGE_WIDTH - MARGIN_X * 2; // 162
+
 function statusLabel(status) {
   const map = {
     paid: "Paid",
@@ -34,104 +38,137 @@ function statusInkColor(status) {
   return map[status] || MUTED;
 }
 
+// Truncates a single line to fit maxWidth, appending an ellipsis if needed,
+// rather than letting jsPDF print text that visually overruns its column.
+function fitLine(doc, text, maxWidth) {
+  if (doc.getTextWidth(text) <= maxWidth) return text;
+  let truncated = text;
+  while (truncated.length > 1 && doc.getTextWidth(truncated + "…") > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  return truncated + "…";
+}
+
 function buildDocPdf({ type, number, business, customer, items, total, status }) {
   const doc = new jsPDF();
-  const pageWidth = 210;
-  const marginX = 24;
   const label = type === "invoice" ? "Invoice" : "Quote";
 
   let y = 26;
 
   // ---- Letterhead ----
-  // Business name set as the visual anchor, quiet and confident —
-  // no color banner, just weight and spacing to establish hierarchy.
-  doc.setTextColor(...INK);
+  // Right-hand block (doc type + number) reserves its own zone so the
+  // business name on the left can never run into it, however long it is.
+  const rightBlockWidth = 60; // reserved zone for label + number, right-aligned
+  const nameMaxWidth = CONTENT_WIDTH - rightBlockWidth - 8; // 8mm gutter
+
   doc.setFont("times", "bold");
   doc.setFontSize(22);
-  doc.text(business?.name || "Your Business", marginX, y);
+  doc.setTextColor(...INK);
+  const nameLines = doc.splitTextToSize(business?.name || "Your Business", nameMaxWidth).slice(0, 2);
+  nameLines.forEach((line, i) => doc.text(line, MARGIN_X, y + i * 8));
+  const nameBlockHeight = nameLines.length > 1 ? nameLines.length * 8 : 0;
 
   doc.setFont("times", "italic");
   doc.setFontSize(10);
   doc.setTextColor(...MUTED);
-  doc.text("One platform. Your way.", marginX, y + 6);
+  doc.text("One platform. Your way.", MARGIN_X, y + Math.max(6, nameBlockHeight + 6));
 
-  // Document type + number, right aligned, restrained size
+  // Document type + number, right aligned in their own reserved column
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...MUTED);
-  doc.text(label.toUpperCase(), pageWidth - marginX, y - 5, { align: "right" });
+  doc.text(label.toUpperCase(), PAGE_WIDTH - MARGIN_X, y - 5, { align: "right" });
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.setTextColor(...INK);
-  doc.text(number, pageWidth - marginX, y + 2, { align: "right" });
+  doc.text(number, PAGE_WIDTH - MARGIN_X, y + 2, { align: "right" });
 
-  y += 16;
+  y += Math.max(16, nameBlockHeight + 10);
   doc.setDrawColor(...ACCENT);
   doc.setLineWidth(0.6);
-  doc.line(marginX, y, pageWidth - marginX, y);
+  doc.line(MARGIN_X, y, PAGE_WIDTH - MARGIN_X, y);
 
   y += 12;
 
   // ---- Bill To / Status / Date row ----
+  // Three independent zones (left / middle / right) each with a hard
+  // width cap, so a long customer name can wrap instead of colliding
+  // with the status badge or date.
+  const billToWidth = 85;
+  const statusX = PAGE_WIDTH - MARGIN_X - 55;
+  const dateX = PAGE_WIDTH - MARGIN_X;
+
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text("BILLED TO", marginX, y);
-
-  doc.text("STATUS", pageWidth - marginX - 55, y);
-  doc.text("DATE", pageWidth - marginX, y, { align: "right" });
+  doc.text("BILLED TO", MARGIN_X, y);
+  doc.text("STATUS", statusX, y);
+  doc.text("DATE", dateX, y, { align: "right" });
 
   y += 7;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11.5);
   doc.setTextColor(...INK);
-  doc.text(customer?.name || "—", marginX, y);
+  const customerLines = doc.splitTextToSize(customer?.name || "—", billToWidth).slice(0, 2);
+  customerLines.forEach((line, i) => doc.text(line, MARGIN_X, y + i * 6));
 
   const sColor = statusInkColor(status);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
   doc.setTextColor(...sColor);
-  doc.text(statusLabel(status), pageWidth - marginX - 55, y);
+  doc.text(statusLabel(status), statusX, y);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10.5);
   doc.setTextColor(...INK);
-  doc.text(new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }), pageWidth - marginX, y, { align: "right" });
+  doc.text(
+    new Date().toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }),
+    dateX,
+    y,
+    { align: "right" }
+  );
+
+  const billToBlockHeight = customerLines.length > 1 ? (customerLines.length - 1) * 6 : 0;
+  y += billToBlockHeight;
 
   if (customer?.email) {
     y += 6;
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.setTextColor(...MUTED);
-    doc.text(customer.email, marginX, y);
+    doc.text(fitLine(doc, customer.email, billToWidth), MARGIN_X, y);
   }
 
   y += 14;
 
   // ---- Line items table ----
-  const colDesc = marginX;
-  const colQty = marginX + 112;
-  const colPrice = marginX + 134;
-  const colTotal = pageWidth - marginX;
+  // Fixed, non-overlapping zones: description gets the remaining space,
+  // the three numeric columns are right-aligned so digits of varying
+  // widths never bump into their neighbor.
+  const colDescX = MARGIN_X;
+  const colQtyRight = MARGIN_X + 108;
+  const colPriceRight = MARGIN_X + 138;
+  const colTotalRight = PAGE_WIDTH - MARGIN_X;
+  const descWidth = colQtyRight - colDescX - 6; // 6mm gutter before Qty
 
   doc.setDrawColor(...INK);
   doc.setLineWidth(0.4);
-  doc.line(marginX, y, pageWidth - marginX, y);
+  doc.line(MARGIN_X, y, PAGE_WIDTH - MARGIN_X, y);
   y += 7;
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
-  doc.text("DESCRIPTION", colDesc, y);
-  doc.text("QTY", colQty, y);
-  doc.text("UNIT PRICE", colPrice, y);
-  doc.text("AMOUNT", colTotal, y, { align: "right" });
+  doc.text("DESCRIPTION", colDescX, y);
+  doc.text("QTY", colQtyRight, y, { align: "right" });
+  doc.text("UNIT PRICE", colPriceRight, y, { align: "right" });
+  doc.text("AMOUNT", colTotalRight, y, { align: "right" });
 
   y += 4;
   doc.setDrawColor(...HAIRLINE);
   doc.setLineWidth(0.3);
-  doc.line(marginX, y, pageWidth - marginX, y);
+  doc.line(MARGIN_X, y, PAGE_WIDTH - MARGIN_X, y);
 
   y += 8;
 
@@ -141,9 +178,12 @@ function buildDocPdf({ type, number, business, customer, items, total, status })
     doc.setFont("helvetica", "italic");
     doc.setFontSize(9.5);
     doc.setTextColor(...MUTED);
-    doc.text("No line items.", colDesc, y);
+    doc.text("No line items.", colDescX, y);
     y += 10;
   }
+
+  const LINE_HEIGHT = 5;
+  const ROW_PADDING = 5;
 
   rows.forEach((item) => {
     const qty = Number(item.quantity) || 0;
@@ -152,40 +192,59 @@ function buildDocPdf({ type, number, business, customer, items, total, status })
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    doc.setTextColor(...INK);
-    const desc = doc.splitTextToSize(item.description || "", 100);
-    doc.text(desc[0] || "", colDesc, y);
-    doc.text(String(qty), colQty, y);
-    doc.text(`R ${price.toFixed(2)}`, colPrice, y);
-    doc.text(`R ${lineTotal.toFixed(2)}`, colTotal, y, { align: "right" });
 
-    y += 9;
+    // Wrap the description across as many lines as it needs (capped so a
+    // single absurd entry can't run away) instead of silently truncating
+    // to one line the way the previous version did.
+    const descLines = doc.splitTextToSize(item.description || "", descWidth).slice(0, 4);
+    const rowHeight = Math.max(descLines.length * LINE_HEIGHT, LINE_HEIGHT) + ROW_PADDING - LINE_HEIGHT;
+
+    if (y + descLines.length * LINE_HEIGHT > 258) {
+      doc.addPage();
+      y = 24;
+    }
+
+    doc.setTextColor(...INK);
+    descLines.forEach((line, i) => doc.text(line, colDescX, y + i * LINE_HEIGHT));
+
+    // Numeric columns align to the first line of the description.
+    doc.text(String(qty), colQtyRight, y, { align: "right" });
+    doc.text(`R ${price.toFixed(2)}`, colPriceRight, y, { align: "right" });
+    doc.text(`R ${lineTotal.toFixed(2)}`, colTotalRight, y, { align: "right" });
+
+    const consumedHeight = Math.max(descLines.length * LINE_HEIGHT, LINE_HEIGHT);
+    y += consumedHeight + (ROW_PADDING - LINE_HEIGHT) + 4;
+
     doc.setDrawColor(...HAIRLINE);
     doc.setLineWidth(0.2);
-    doc.line(marginX, y - 3.5, pageWidth - marginX, y - 3.5);
+    doc.line(MARGIN_X, y - 3.5, PAGE_WIDTH - MARGIN_X, y - 3.5);
 
-    if (y > 245) {
+    if (y > 258) {
       doc.addPage();
       y = 24;
     }
   });
 
   // ---- Total ----
+  if (y > 250) {
+    doc.addPage();
+    y = 24;
+  }
   y += 6;
   doc.setDrawColor(...ACCENT);
   doc.setLineWidth(0.6);
-  doc.line(pageWidth - marginX - 75, y, pageWidth - marginX, y);
+  doc.line(PAGE_WIDTH - MARGIN_X - 75, y, PAGE_WIDTH - MARGIN_X, y);
   y += 9;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...MUTED);
-  doc.text("TOTAL DUE", pageWidth - marginX - 75, y);
+  doc.text("TOTAL DUE", PAGE_WIDTH - MARGIN_X - 75, y);
 
   doc.setFont("times", "bold");
   doc.setFontSize(17);
   doc.setTextColor(...ACCENT);
-  doc.text(`R ${Number(total).toFixed(2)}`, pageWidth - marginX, y + 1, { align: "right" });
+  doc.text(`R ${Number(total).toFixed(2)}`, PAGE_WIDTH - MARGIN_X, y + 1, { align: "right" });
 
   // ---- Payment details ----
   // Only rendered for invoices (quotes have nothing to pay yet) and only
@@ -193,7 +252,7 @@ function buildDocPdf({ type, number, business, customer, items, total, status })
   const hasBankingDetails = type === "invoice" && business?.bank_name && business?.bank_account_number;
 
   if (hasBankingDetails) {
-    if (y > 240) {
+    if (y > 235) {
       doc.addPage();
       y = 24;
     }
@@ -201,13 +260,13 @@ function buildDocPdf({ type, number, business, customer, items, total, status })
     y += 14;
     doc.setDrawColor(...HAIRLINE);
     doc.setLineWidth(0.3);
-    doc.line(marginX, y, pageWidth - marginX, y);
+    doc.line(MARGIN_X, y, PAGE_WIDTH - MARGIN_X, y);
     y += 9;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...INK);
-    doc.text("PAYMENT DETAILS", marginX, y);
+    doc.text("PAYMENT DETAILS", MARGIN_X, y);
     y += 7;
 
     const bankRows = [
@@ -218,14 +277,22 @@ function buildDocPdf({ type, number, business, customer, items, total, status })
       ["Account type", business.bank_account_type],
     ].filter(([, value]) => value);
 
+    const bankLabelX = MARGIN_X;
+    const bankValueX = MARGIN_X + 45;
+    const bankValueWidth = CONTENT_WIDTH - 45;
+
     doc.setFontSize(9.5);
-    bankRows.forEach(([label, value]) => {
+    bankRows.forEach(([bankLabel, value]) => {
+      if (y > 270) {
+        doc.addPage();
+        y = 24;
+      }
       doc.setFont("helvetica", "normal");
       doc.setTextColor(...MUTED);
-      doc.text(label, marginX, y);
+      doc.text(bankLabel, bankLabelX, y);
       doc.setFont("helvetica", "bold");
       doc.setTextColor(...INK);
-      doc.text(String(value), marginX + 45, y);
+      doc.text(fitLine(doc, String(value), bankValueWidth), bankValueX, y);
       y += 6;
     });
 
@@ -234,8 +301,8 @@ function buildDocPdf({ type, number, business, customer, items, total, status })
     doc.setFontSize(8.5);
     doc.setTextColor(...MUTED);
     const refNote = business.bank_payment_reference_note || `Please use "${number}" as your payment reference.`;
-    const refLines = doc.splitTextToSize(refNote, pageWidth - marginX * 2);
-    doc.text(refLines, marginX, y);
+    const refLines = doc.splitTextToSize(refNote, CONTENT_WIDTH).slice(0, 3);
+    doc.text(refLines, MARGIN_X, y);
     y += refLines.length * 5;
   }
 
@@ -245,16 +312,17 @@ function buildDocPdf({ type, number, business, customer, items, total, status })
     doc.setPage(p);
     doc.setDrawColor(...HAIRLINE);
     doc.setLineWidth(0.3);
-    doc.line(marginX, 275, pageWidth - marginX, 275);
+    doc.line(MARGIN_X, 275, PAGE_WIDTH - MARGIN_X, 275);
 
     doc.setFont("times", "italic");
     doc.setFontSize(9);
     doc.setTextColor(...MUTED);
-    doc.text("Thank you for your business.", marginX, 282);
+    doc.text("Thank you for your business.", MARGIN_X, 282);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(8);
-    doc.text(`Page ${p} of ${pageCount}`, pageWidth - marginX, 282, { align: "right" });
+    doc.setTextColor(...MUTED);
+    doc.text(`Page ${p} of ${pageCount}`, PAGE_WIDTH - MARGIN_X, 282, { align: "right" });
   }
 
   return doc;
