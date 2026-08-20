@@ -197,7 +197,6 @@ function buildDocPdf({ type, number, business, customer, items, total, status })
     // single absurd entry can't run away) instead of silently truncating
     // to one line the way the previous version did.
     const descLines = doc.splitTextToSize(item.description || "", descWidth).slice(0, 4);
-    const rowHeight = Math.max(descLines.length * LINE_HEIGHT, LINE_HEIGHT) + ROW_PADDING - LINE_HEIGHT;
 
     if (y + descLines.length * LINE_HEIGHT > 258) {
       doc.addPage();
