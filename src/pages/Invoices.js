@@ -1135,7 +1135,7 @@ function Invoices({ business, appUser }) {
                         onChange={() => toggleSelectOne(inv.id)}
                       />
                     </td>
-                    <td className="inv-name-cell">
+                    <td className="inv-name-cell" data-label="Invoice #">
                       {inv.invoice_number}
                       {inv.invoice_attachments?.length > 0 && (
                         <span className="inv-attach-badge" title={`${inv.invoice_attachments.length} attachment(s)`}>
@@ -1143,13 +1143,13 @@ function Invoices({ business, appUser }) {
                         </span>
                       )}
                     </td>
-                    <td className={inv.quotes?.quote_number ? "" : "inv-muted"}>
+                    <td className={inv.quotes?.quote_number ? "" : "inv-muted"} data-label="Quote #">
                       {inv.quotes?.quote_number || "—"}
                     </td>
-                    <td className={inv.customers?.name ? "" : "inv-muted"}>
+                    <td className={inv.customers?.name ? "" : "inv-muted"} data-label="Customer">
                       {inv.customers?.name || "—"}
                     </td>
-                    <td>
+                    <td data-label="Status">
                       <span className={`inv-status inv-status--${inv.status}`}>
                         {inv.status}
                       </span>
@@ -1162,10 +1162,11 @@ function Invoices({ business, appUser }) {
                           ? ""
                           : "inv-muted"
                       }
+                      data-label="Due date"
                     >
                       {formatDueDate(inv.due_date)}
                     </td>
-                    <td className="inv-total-cell">R{Number(inv.total).toFixed(2)}</td>
+                    <td className="inv-total-cell" data-label="Total">R{Number(inv.total).toFixed(2)}</td>
                     <td>
                       <div className="inv-actions-cell">
                         {inv.status !== "paid" && (
@@ -1261,6 +1262,16 @@ function Invoices({ business, appUser }) {
                 <button type="button" className="inv-add-row-btn" onClick={addLineItem}>
                   + Add row
                 </button>
+              </div>
+
+              {/* Column headers for the line item grid — hidden once the
+                  grid collapses to a stacked layout on narrow screens,
+                  since each input's placeholder takes over that job there. */}
+              <div className="inv-line-item-headers" aria-hidden="true">
+                <span>Description</span>
+                <span>Qty</span>
+                <span>Unit price</span>
+                <span></span>
               </div>
 
               {lineItems.map((item, index) => (

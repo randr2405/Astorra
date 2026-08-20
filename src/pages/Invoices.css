@@ -527,6 +527,24 @@
 }
 .inv-add-row-btn:hover { color: var(--teal); }
 
+/* Column headers above the line item rows. Grid matches .inv-line-item
+   exactly (including the trailing remove-button column, left blank)
+   so labels line up with their inputs. */
+.inv-line-item-headers {
+  display: grid;
+  grid-template-columns: 1fr 60px 90px 28px;
+  gap: 8px;
+  padding: 0 2px;
+  margin-bottom: 6px;
+}
+.inv-line-item-headers span {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--slate);
+}
+
 .inv-line-item {
   display: grid;
   grid-template-columns: 1fr 60px 90px 28px;
@@ -793,6 +811,11 @@
   .inv-modal { padding: 20px; border-radius: 14px; }
   .inv-modal h2 { font-size: 18px; margin-bottom: 18px; }
   .inv-modal-actions { flex-direction: column; }
+
+  /* Line items reflow into a 2-column grid on mobile — the header row
+     above no longer lines up with anything, so hide it and rely on
+     each input's placeholder text instead. */
+  .inv-line-item-headers { display: none; }
 
   .inv-line-item {
     grid-template-columns: 1fr 1fr;
