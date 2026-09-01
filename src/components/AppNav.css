@@ -39,7 +39,7 @@
 }
 
 .app-nav-logo {
-  height: 28px;
+  height: 44px;
   width: auto;
   display: block;
   cursor: pointer;
@@ -220,7 +220,7 @@
 
 @media (max-width: 480px) {
   .app-nav-logo {
-    height: 22px;
+    height: 32px;
   }
   .app-nav-logout {
     padding: 6px 10px;
