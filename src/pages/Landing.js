@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { Renderer, Program, Mesh, Triangle } from "ogl";
+import astorraLogo from "../assets/astorra-logo.png";
 import "./Landing.css";
 
 /* ------------------------------------------------------------------ */
@@ -595,7 +596,7 @@ function Landing() {
     <div className="landing">
       <nav className="nav">
         <div className="nav-inner">
-          <span className="wordmark">ASTORRA</span>
+          <img src={astorraLogo} alt="Astorra" className="nav-logo" />
           <div className="nav-actions">
             <button className="link-btn" onClick={() => navigate("/feedback")}>
               Feedback
@@ -786,7 +787,7 @@ function Landing() {
 
       <footer className="footer">
         <div className="section-inner footer-inner">
-          <span className="wordmark wordmark-small">ASTORRA</span>
+          <img src={astorraLogo} alt="Astorra" className="nav-logo nav-logo--footer" />
           <div className="footer-meta">
             <span>Owned and operated by R&amp;R Agencies</span>
             <span>info@rragencies.co.za · 081 336 5266</span>

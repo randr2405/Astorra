@@ -68,6 +68,14 @@
   font-size: 15px;
   letter-spacing: 0.12em;
 }
+.nav-logo {
+  height: 40px;
+  width: auto;
+  display: block;
+}
+.nav-logo--footer {
+  height: 32px;
+}
 .nav-actions {
   display: flex;
   align-items: center;
@@ -661,6 +669,12 @@ h2 {
   .section-inner { padding: 0 16px; }
   .nav-inner { padding: 14px 16px; }
   .wordmark { font-size: 16px; }
+  .nav-logo {
+    height: 30px;
+  }
+  .nav-logo--footer {
+    height: 26px;
+  }
   .nav-actions { gap: 8px; }
   .cta-btn--small { padding: 9px 16px; font-size: 13px; }
 
