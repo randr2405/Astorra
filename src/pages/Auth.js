@@ -8,6 +8,7 @@ import {
 } from "firebase/auth";
 import { Renderer, Program, Mesh, Triangle } from "ogl";
 import { auth } from "../lib/firebase";
+import astorraLogo from "../assets/astorra-logo.png";
 import "./Auth.css";
 
 /* ------------------------------------------------------------------ */
@@ -274,7 +275,7 @@ function Auth() {
       </div>
 
       <div className="auth-card" key={mode}>
-        <p className="auth-wordmark">ASTORRA</p>
+        <img src={astorraLogo} alt="Astorra" className="auth-logo" />
         <p className="auth-slogan">One platform. Your way.</p>
 
         <h2 className="auth-heading">{heading}</h2>
