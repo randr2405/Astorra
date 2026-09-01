@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Renderer, Program, Mesh, Triangle } from "ogl";
 import { supabase } from "../lib/supabaseClient";
+import astorraLogo from "../assets/astorra-logo.png";
 import "./Feedback.css";
 
 /* ------------------------------------------------------------------ */
@@ -459,9 +460,12 @@ function Feedback() {
 
       <nav className="fb-nav">
         <div className="fb-nav-inner">
-          <span className="fb-wordmark" onClick={() => navigate("/")}>
-            ASTORRA
-          </span>
+          <img
+            src={astorraLogo}
+            alt="Astorra"
+            className="fb-nav-logo"
+            onClick={() => navigate("/")}
+          />
           <div className="fb-nav-actions">
             <button className="fb-link-btn" onClick={() => navigate("/auth")}>
               Log in
@@ -551,9 +555,12 @@ function Feedback() {
 
       <footer className="fb-footer">
         <div className="fb-footer-inner">
-          <span className="fb-wordmark fb-wordmark-small" onClick={() => navigate("/")}>
-            ASTORRA
-          </span>
+          <img
+            src={astorraLogo}
+            alt="Astorra"
+            className="fb-nav-logo fb-nav-logo--footer"
+            onClick={() => navigate("/")}
+          />
           <div className="fb-footer-meta">
             <span>Owned and operated by R&amp;R Agencies</span>
             <span>info@rragencies.co.za · 081 336 5266</span>

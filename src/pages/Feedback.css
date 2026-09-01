@@ -62,6 +62,15 @@
   cursor: pointer;
   white-space: nowrap;
 }
+.fb-nav-logo {
+  height: 40px;
+  width: auto;
+  display: block;
+  cursor: pointer;
+}
+.fb-nav-logo--footer {
+  height: 32px;
+}
 .fb-nav-actions {
   display: flex;
   align-items: center;
@@ -382,6 +391,12 @@
 @media (max-width: 560px) {
   .fb-nav-inner { padding: 14px 16px; }
   .fb-wordmark { font-size: 16px; }
+  .fb-nav-logo {
+    height: 30px;
+  }
+  .fb-nav-logo--footer {
+    height: 26px;
+  }
   .fb-nav-actions { gap: 8px; }
   .fb-link-btn { padding: 8px 2px; font-size: 13px; }
   .fb-cta-btn { padding: 9px 14px; font-size: 13px; }
