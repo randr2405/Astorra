@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { signOut } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import NotificationBell from "./NotificationBell";
+import astorraLogo from "../assets/astorra-logo.png";
 import "./AppNav.css";
 
 function AppNav({ business, showBack = true }) {
@@ -34,7 +35,12 @@ function AppNav({ business, showBack = true }) {
               ← Dashboard
             </button>
           )}
-          <span className="app-nav-wordmark">ASTORRA</span>
+          <img
+            src={astorraLogo}
+            alt="Astorra"
+            className="app-nav-logo"
+            onClick={() => navigate("/dashboard")}
+          />
         </div>
 
         <div className="app-nav-links">

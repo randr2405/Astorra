@@ -38,12 +38,11 @@
   color: #fff;
 }
 
-.app-nav-wordmark {
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  font-size: 15px;
-  color: #fff;
-  white-space: nowrap;
+.app-nav-logo {
+  height: 28px;
+  width: auto;
+  display: block;
+  cursor: pointer;
 }
 
 .app-nav-links {
@@ -220,8 +219,8 @@
 }
 
 @media (max-width: 480px) {
-  .app-nav-wordmark {
-    font-size: 14px;
+  .app-nav-logo {
+    height: 22px;
   }
   .app-nav-logout {
     padding: 6px 10px;
