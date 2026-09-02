@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 
 // Public, unauthenticated page — no Firebase/Supabase checks needed.
 // Route this at /privacy in App.jsx (see routing note).
@@ -8,6 +9,14 @@ const LAST_UPDATED = "6 August 2026";
 export default function Privacy() {
   return (
     <div style={styles.page}>
+      <Helmet>
+        <title>Privacy Policy | Astorra</title>
+        <meta
+          name="description"
+          content="Astorra's privacy policy — what personal information we collect, why, and your rights under South Africa's POPIA."
+        />
+        <link rel="canonical" href="https://www.astorra.co.za/privacy" />
+      </Helmet>
       <div style={styles.container}>
         <Link to="/" style={styles.backLink}>
           ← Back to Astorra
