@@ -6,6 +6,7 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
 } from "firebase/auth";
+import { Helmet } from "react-helmet-async";
 import { Renderer, Program, Mesh, Triangle } from "ogl";
 import { auth } from "../lib/firebase";
 import astorraLogo from "../assets/astorra-logo.png";
@@ -251,6 +252,14 @@ function Auth() {
 
   return (
     <div className="auth-page">
+      <Helmet>
+        <title>Log In or Sign Up | Astorra</title>
+        <meta
+          name="description"
+          content="Log in or create your free Astorra account to start managing customers, quotes, invoices, inventory and staff in one place."
+        />
+        <link rel="canonical" href="https://www.astorra.co.za/auth" />
+      </Helmet>
       <div className="auth-bg">
         <div className="auth-liquid">
           <LiquidChrome
