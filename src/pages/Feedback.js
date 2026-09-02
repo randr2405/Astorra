@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 import { Renderer, Program, Mesh, Triangle } from "ogl";
 import { supabase } from "../lib/supabaseClient";
 import astorraLogo from "../assets/astorra-logo.png";
@@ -439,6 +440,14 @@ function Feedback() {
 
   return (
     <div className="fb-page">
+      <Helmet>
+        <title>Feedback & Recommendations | Astorra</title>
+        <meta
+          name="description"
+          content="Share feedback, report a bug, or suggest a feature for Astorra. Every submission goes straight to the team building it."
+        />
+        <link rel="canonical" href="https://www.astorra.co.za/feedback" />
+      </Helmet>
       <div className="fb-ferrofluid" aria-hidden="true">
         <Ferrofluid
           colors={["#7c3aed", "#3b82f6", "#14b8a6"]}
