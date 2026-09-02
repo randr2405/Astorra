@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 
 // Public, unauthenticated page — no Firebase/Supabase checks needed.
 // Route this at /terms in App.jsx (see routing note).
@@ -8,6 +9,14 @@ const LAST_UPDATED = "6 August 2026";
 export default function Terms() {
   return (
     <div style={styles.page}>
+      <Helmet>
+        <title>Terms of Service | Astorra</title>
+        <meta
+          name="description"
+          content="Astorra's terms of service — plans, billing, data ownership, acceptable use, and the rules governing your use of the platform."
+        />
+        <link rel="canonical" href="https://www.astorra.co.za/terms" />
+      </Helmet>
       <div style={styles.container}>
         <Link to="/" style={styles.backLink}>
           ← Back to Astorra
