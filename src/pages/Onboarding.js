@@ -11,7 +11,6 @@ const checklistOptions = [
   { key: "bookings", label: "We manage bookings or scheduling", icon: "📅" },
   { key: "stock", label: "We track stock or inventory", icon: "📦" },
   { key: "staff", label: "We manage staff records", icon: "🧑‍🤝‍🧑" },
-  { key: "documents", label: "We manage documents or paperwork", icon: "🗂️" },
 ];
 
 const DEFAULT_PLAN = "free";
@@ -42,9 +41,6 @@ function mapAnswersToModules(answers) {
   if (answers.staff) {
     modules.add("staff");
   }
-  if (answers.documents) {
-    modules.add("documents");
-  }
 
   return Array.from(modules);
 }
@@ -64,7 +60,6 @@ function Onboarding({ firebaseUser, onComplete }) {
     bookings: false,
     stock: false,
     staff: false,
-    documents: false,
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
