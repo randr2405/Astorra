@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
+import { Helmet } from "react-helmet-async";
 import { Renderer, Program, Mesh, Triangle } from "ogl";
 import astorraLogo from "../assets/astorra-logo.png";
 import "./Landing.css";
@@ -594,6 +595,14 @@ function Landing() {
 
   return (
     <div className="landing">
+      <Helmet>
+        <title>Astorra | Business Management Software for South African SMEs</title>
+        <meta
+          name="description"
+          content="Astorra brings customers, quotes, invoices, inventory, staff and bookings into one connected workspace built for South African small businesses. Free tier available."
+        />
+        <link rel="canonical" href="https://www.astorra.co.za/" />
+      </Helmet>
       <nav className="nav">
         <div className="nav-inner">
           <img src={astorraLogo} alt="Astorra" className="nav-logo" />
