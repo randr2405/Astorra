@@ -385,6 +385,7 @@ export default function Jobs({ business, appUser }) {
   const [customers, setCustomers] = useState([]);
   const [staff, setStaff] = useState([]);
   const [acceptedQuotes, setAcceptedQuotes] = useState([]);
+  const [creatorsById, setCreatorsById] = useState({});
   const [loading, setLoading] = useState(true);
   const [revealed, setRevealed] = useState(false);
 
@@ -415,7 +416,27 @@ export default function Jobs({ business, appUser }) {
       .eq("business_id", business.id)
       .order("created_at", { ascending: false });
 
-    if (!fetchError && data) setJobs(data);
+    if (!fetchError && data) {
+      setJobs(data);
+
+      // Resolve created_by user IDs to emails for the "by ..." sub-line.
+      const creatorIds = Array.from(
+        new Set(data.map((j) => j.created_by).filter(Boolean))
+      );
+      if (creatorIds.length > 0) {
+        const { data: creatorUsers } = await supabase
+          .from("users")
+          .select("id, email")
+          .in("id", creatorIds);
+        const map = {};
+        (creatorUsers || []).forEach((u) => {
+          map[u.id] = u.email;
+        });
+        setCreatorsById(map);
+      } else {
+        setCreatorsById({});
+      }
+    }
     setLoading(false);
   }, [business.id]);
 
@@ -547,6 +568,7 @@ export default function Jobs({ business, appUser }) {
             due_date: form.due_date || null,
             notes: form.notes || null,
             status: form.status,
+            created_by: appUser?.id,
           })
           .select()
           .single();
@@ -714,7 +736,12 @@ export default function Jobs({ business, appUser }) {
                       <tr key={job.id} className="job-row" style={{ animationDelay: `${Math.min(idx, 8) * 0.04}s` }}>
                         <td>
                           <div className="job-name-cell">{job.title}</div>
-                          <div className="job-muted">{job.job_number}</div>
+                          <div className="job-muted">
+                            {job.job_number}
+                            {job.created_by && creatorsById[job.created_by] && (
+                              <span className="job-created-by"> · by {creatorsById[job.created_by]}</span>
+                            )}
+                          </div>
                         </td>
                         <td className="job-muted">{job.customers?.name || "—"}</td>
                         <td>

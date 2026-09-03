@@ -286,6 +286,7 @@
 
 .job-name-cell { font-weight: 600; color: #fdfdfe; }
 .job-muted { color: var(--slate); }
+.job-created-by { font-size: 11px; }
 .job-progress-cell { font-weight: 600; color: #fdfdfe; }
 
 .job-status {
