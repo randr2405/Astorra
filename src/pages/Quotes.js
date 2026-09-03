@@ -206,6 +206,7 @@ function Quotes({ business, appUser }) {
   const navigate = useNavigate();
   const [quotes, setQuotes] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [creatorsById, setCreatorsById] = useState({});
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -233,7 +234,27 @@ function Quotes({ business, appUser }) {
       .eq("business_id", business.id)
       .order("created_at", { ascending: false });
 
-    if (!fetchError) setQuotes(data || []);
+    if (!fetchError) {
+      setQuotes(data || []);
+
+      // Resolve created_by user IDs to emails for the "by ..." sub-line.
+      const creatorIds = Array.from(
+        new Set((data || []).map((q) => q.created_by).filter(Boolean))
+      );
+      if (creatorIds.length > 0) {
+        const { data: creatorUsers } = await supabase
+          .from("users")
+          .select("id, email")
+          .in("id", creatorIds);
+        const map = {};
+        (creatorUsers || []).forEach((u) => {
+          map[u.id] = u.email;
+        });
+        setCreatorsById(map);
+      } else {
+        setCreatorsById({});
+      }
+    }
     setLoading(false);
   }, [business.id]);
 
@@ -427,6 +448,7 @@ function Quotes({ business, appUser }) {
           quote_number: quoteNumber,
           status: form.status,
           total,
+          created_by: appUser?.id,
         })
         .select()
         .single();
@@ -488,6 +510,7 @@ function Quotes({ business, appUser }) {
           quote_number: quoteNumber,
           status: "draft",
           total: quote.total,
+          created_by: appUser?.id,
         })
         .select()
         .single();
@@ -534,6 +557,7 @@ function Quotes({ business, appUser }) {
       invoice_number: invoiceNumber,
       status: "unpaid",
       total: quote.total,
+      created_by: appUser?.id,
     });
 
     if (!convertError) {
@@ -737,7 +761,12 @@ function Quotes({ business, appUser }) {
                       className="quo-row"
                       style={{ animationDelay: loaded ? `${Math.min(i, 12) * 35}ms` : "0ms" }}
                     >
-                      <td className="quo-name-cell" data-label="Quote #">{q.quote_number}</td>
+                      <td className="quo-name-cell" data-label="Quote #">
+                        {q.quote_number}
+                        {q.created_by && creatorsById[q.created_by] && (
+                          <span className="quo-created-by">by {creatorsById[q.created_by]}</span>
+                        )}
+                      </td>
                       <td className={q.customers?.name ? "" : "quo-muted"} data-label="Customer">
                         {q.customers?.name || "—"}
                       </td>

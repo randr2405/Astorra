@@ -296,6 +296,13 @@
 }
 
 .quo-name-cell { font-weight: 600; color: #fdfdfe; }
+.quo-created-by {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--slate);
+  margin-top: 2px;
+}
 .quo-muted { color: var(--slate); }
 .quo-total-cell { font-weight: 600; color: #fdfdfe; }
 
