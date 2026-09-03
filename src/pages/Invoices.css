@@ -431,6 +431,14 @@
   color: var(--slate);
   margin-left: 8px;
 }
+.inv-created-by {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--slate);
+  margin-top: 2px;
+  white-space: nowrap;
+}
 
 .inv-actions-cell { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .inv-action-btn {

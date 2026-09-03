@@ -247,6 +247,7 @@ function InvoicesBackground({
 function Invoices({ business, appUser }) {
   const [invoices, setInvoices] = useState([]);
   const [customers, setCustomers] = useState([]);
+  const [creatorsById, setCreatorsById] = useState({});
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState(null);
@@ -298,7 +299,27 @@ function Invoices({ business, appUser }) {
       .eq("business_id", business.id)
       .order("created_at", { ascending: false });
 
-    if (!fetchError) setInvoices(data || []);
+    if (!fetchError) {
+      setInvoices(data || []);
+
+      // Resolve created_by user IDs to emails for the "by ..." sub-line.
+      const creatorIds = Array.from(
+        new Set((data || []).map((inv) => inv.created_by).filter(Boolean))
+      );
+      if (creatorIds.length > 0) {
+        const { data: creatorUsers } = await supabase
+          .from("users")
+          .select("id, email")
+          .in("id", creatorIds);
+        const map = {};
+        (creatorUsers || []).forEach((u) => {
+          map[u.id] = u.email;
+        });
+        setCreatorsById(map);
+      } else {
+        setCreatorsById({});
+      }
+    }
     setLoading(false);
   }, [business.id]);
 
@@ -583,6 +604,7 @@ function Invoices({ business, appUser }) {
           status: form.status,
           due_date: form.due_date || null,
           total,
+          created_by: appUser?.id,
         })
         .select()
         .single();
@@ -735,6 +757,7 @@ function Invoices({ business, appUser }) {
         status: "unpaid",
         due_date: null,
         total: invoice.total,
+        created_by: appUser?.id,
       })
       .select()
       .single();
@@ -1141,6 +1164,9 @@ function Invoices({ business, appUser }) {
                         <span className="inv-attach-badge" title={`${inv.invoice_attachments.length} attachment(s)`}>
                           📎{inv.invoice_attachments.length}
                         </span>
+                      )}
+                      {inv.created_by && creatorsById[inv.created_by] && (
+                        <span className="inv-created-by">by {creatorsById[inv.created_by]}</span>
                       )}
                     </td>
                     <td className={inv.quotes?.quote_number ? "" : "inv-muted"} data-label="Quote #">
