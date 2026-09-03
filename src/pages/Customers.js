@@ -247,6 +247,7 @@ function Customers({ business, appUser }) {
   const [customers, setCustomers] = useState([]);
   const [invoicesByCustomer, setInvoicesByCustomer] = useState({});
   const [quotesByCustomer, setQuotesByCustomer] = useState({});
+  const [creatorsById, setCreatorsById] = useState({});
   const [loading, setLoading] = useState(true);
   const [loaded, setLoaded] = useState(false);
 
@@ -283,9 +284,27 @@ function Customers({ business, appUser }) {
       (qGroups[q.customer_id] ||= []).push(q);
     });
 
+    // Resolve created_by user IDs to emails for display ("Added by ...").
+    // Done as a separate lookup rather than a join so this keeps working
+    // even for older rows where created_by is null.
+    const creatorIds = Array.from(
+      new Set((customersData || []).map((c) => c.created_by).filter(Boolean))
+    );
+    let creatorMap = {};
+    if (creatorIds.length > 0) {
+      const { data: creatorUsers } = await supabase
+        .from("users")
+        .select("id, email")
+        .in("id", creatorIds);
+      (creatorUsers || []).forEach((u) => {
+        creatorMap[u.id] = u.email;
+      });
+    }
+
     setCustomers(customersData || []);
     setInvoicesByCustomer(invGroups);
     setQuotesByCustomer(qGroups);
+    setCreatorsById(creatorMap);
     setLoading(false);
   }, [business.id]);
 
@@ -401,6 +420,7 @@ function Customers({ business, appUser }) {
         email: form.email,
         phone: form.phone,
         notes: form.notes,
+        created_by: appUser?.id,
       });
 
       if (insertError) {
@@ -648,6 +668,11 @@ function Customers({ business, appUser }) {
                   <p>
                     {drawerCustomer.email || "No email"} · {drawerCustomer.phone || "No phone"}
                   </p>
+                  {drawerCustomer.created_by && creatorsById[drawerCustomer.created_by] && (
+                    <p className="cust-drawer-added-by">
+                      Added by {creatorsById[drawerCustomer.created_by]}
+                    </p>
+                  )}
                 </div>
                 <button className="cust-drawer-close" onClick={() => setDrawerCustomer(null)} aria-label="Close">
                   ×
